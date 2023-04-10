@@ -1,11 +1,21 @@
 #include "SPI.h"
 
 FileCore::FileCore(){
-    ; //to do
+    mount();
 }
 
 FileCore::~FileCore(){
 } //should be unused
+
+void FileCore::mount() {
+    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+        Serial.println("SPIFFS Mount Failed");
+        return;
+    }
+
+    Serial.println("SPIFFS Mount Successfull");
+    return;
+}
 
 void FileCore::listDir(fs::FS &fs, const char * dirname, uint8_t levels){
         Serial.printf("Listing directory: %s\r\n", dirname);

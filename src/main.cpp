@@ -34,9 +34,6 @@ using namespace std;
 #define BCOEFFICIENT 3950
 #define SERIESRESISTOR 10000
 
-// FAT System
-#define FORMAT_SPIFFS_IF_FAILED true
-
 const byte SENSOR[] = {SENS1, SENS2, SENS3, SENS4, SENS5, SENS6, SENS7, SENS8, SENS9, SENS10, SENS11, SENS12, SENS13, SENS14, SENS15, SENS16};
 
 String response;
@@ -133,15 +130,11 @@ void addLine(FileCore *file_p, char time[2], char temps[16], char wattage[2]) {
 }
 
 void initSPI(FileCore *file_p) {
-    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
-        Serial.println("SPIFFS Mount Failed");
-        return;
-    }
-    
+    file_p->mount();
     //createLog();
 }
 
-FileCore file();
+FileCore file;
 
 void setup() {
     // Serial setup
@@ -151,7 +144,6 @@ void setup() {
 
     // SPI setup
     initSPI(&file);
-    //appendFile(SPIFFS, "/log.csv");
 
     // I2C slave setup
     /*
@@ -162,17 +154,6 @@ void setup() {
     Serial.println("SPIFFS Mount Failed");
     return;
     }
-
-    listDir(SPIFFS, "/", 0);
-    writeFile(SPIFFS, "/hello.txt", "Hello ");
-    appendFile(SPIFFS, "/hello.txt", "World!\r\n");
-    readFile(SPIFFS, "/hello.txt");
-    renameFile(SPIFFS, "/hello.txt", "/foo.txt");
-    readFile(SPIFFS, "/foo.txt");
-    deleteFile(SPIFFS, "/foo.txt");
-    testFileIO(SPIFFS, "/test.txt");
-    deleteFile(SPIFFS, "/test.txt");
-    Serial.println( "Test complete" );
     */
 }
 
