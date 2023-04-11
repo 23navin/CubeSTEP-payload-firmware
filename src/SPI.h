@@ -15,7 +15,7 @@
 #include "Fs.h"
 #include "SPIFFS.h"
 
-#define FORMAT_SPIFFS_IF_FAILED true
+#define FORMAT_SPIFFS_IF_FAILED true //Mount definition
 /**
  * Flash storage core driver:
  *  - mount FAT flash storage
