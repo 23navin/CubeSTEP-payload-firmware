@@ -9,13 +9,17 @@
 #define _telemetry_H_included
 
 #include <stdint.h>
+#include <stdio.h>
+#include <cstring>
 
 /* definitions */
 #define number_of_temp_sensors  16  // Number of temperatures sensors being read by adc
 #define number_of_watt_outs     2   // Number of discrete wattage outputs
 
-#define char_length_temp        7   // Length of char* to hold temp value in .csv "XXX.XXX"
-#define char_length_watt        6   // Length of char* to hold wattage valye in .csv "XX.XXX"
+#define char_length_temp        8   // Length of char* to hold temp value in .csv
+#define char_precision_temp     3   // Precision of char* to hold temp value in .csv
+#define char_length_watt        7   // Length of char* to hold wattage value in .csv
+#define char_precision_watt     3   // Precision of char* to hold wattage value in .csv
 
 typedef int8_t                  i8;     // 8-bit signed integer
 typedef uint8_t                 u8;     // 8-bit unsigned integer
@@ -24,26 +28,22 @@ typedef uint16_t                u16;    // 16-bit unsigned integer
 typedef int32_t                 i32;    // 32-bit signed integer
 typedef uint32_t                u32;    // 32-bit unsigned integer
 
-class Telemetry{
-public:
-    //get
-    void getTemp(float* tempArray[number_of_temp_sensors]);
+struct Telemetry{
+    //stored data
+    float SENS[number_of_temp_sensors]; // temperature array
+    float Watt[number_of_watt_outs];  // wattage array
+    u32 seconds;    // time: seconds portion
+    u32 useconds;   // time: micro-seconds portion
 
-    void getTemp(char* tempChar[char_length_temp], int sensor);
+    Telemetry();
 
-    void getWatt(float* wattArray[number_of_watt_outs]);
+    //output to char* functions
 
-    void getWatt(char* wattChar[char_length_watt]);
+    void toCSV(char *tempChar, int channel);
 
-    void getTime(u32 new_seconds, u32 new_useconds);
+    void tocSV(char *wattChar, int channel);
 
-
-    //use template to create a function to return an individual sensor value
-
-    //set
-    void setTemps(float newTemps[number_of_temp_sensors]);
-
-    void setWatt(float newWatt[number_of_watt_outs]);
+    //set functions
 
     void setTime(u32 seconds, u32 useconds);
 
@@ -51,11 +51,6 @@ public:
 
     void set(float newTemps[number_of_temp_sensors], float newWatt[2]);
 
-private:
-    float SENS[16]; // temperature array
-    float Watt[2];  // wattage array
-    u32 seconds;    // time: seconds portion
-    u32 useconds;   // time: micro-seconds portion
-
+    void clear();
 };
 #endif // _telemetry_H_included

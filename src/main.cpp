@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "SPI.h"
+#include "Telemetry.h"
 using namespace std;
 
 // I2C bus
@@ -142,6 +143,11 @@ void initSPI(FileCore *file_p) {
     //createLog();
 }
 
+void teleTester(Telemetry *tele, char *csventry) {
+    tele->SENS[3] = 888.0/7.0;
+    tele->toCSV(csventry, 3);
+}
+
 FileCore file;
 
 void setup() {
@@ -151,7 +157,16 @@ void setup() {
     Serial.println("starting!\n");
 
     // SPI setup
-    initSPI(&file);
+    //initSPI(&file);
+
+    // Telemetry testing
+    Serial.println("telemetry tests below");
+
+    Telemetry active;
+    char tempout[char_length_temp];
+
+    teleTester(&active, tempout);
+    Serial.println(tempout);
 
     // I2C slave setup
     /*
