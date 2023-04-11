@@ -1,38 +1,46 @@
+/**
+ * @file main.cpp
+ * @author Benjamin Navin (bnjames@cpp.edu)
+ * 
+ * @brief ESP32 Payload Processor firmware
+ * //will add documentation later 
+ */
+
 #include <Arduino.h>
 #include <Wire.h>
 #include "SPI.h"
 using namespace std;
 
 // I2C bus
-#define SDA 1
-#define SCL 2
-#define SLAVE_ADDRESS 0x04
-#define ANSWER_SIZE 5
+#define SDA 1               // SDA pin
+#define SCL 2               // SCL pin
+#define SLAVE_ADDRESS 0x04  // device address
+#define ANSWER_SIZE 5       // length of message that is sent over I2C
 
 // ADC pins
-#define SENS1 1
-#define SENS2 2
-#define SENS3 3
-#define SENS4 4
-#define SENS5 5
-#define SENS6 6
-#define SENS7 7
-#define SENS8 8
-#define SENS9 9
-#define SENS10 10
-#define SENS11 11
-#define SENS12 12
-#define SENS13 13
-#define SENS14 14
-#define SENS15 15
-#define SENS16 16
+#define SENS1 1     // temperature sensor from ADC channel 1
+#define SENS2 2     // temperature sensor from ADC channel 2
+#define SENS3 3     // temperature sensor from ADC channel 3
+#define SENS4 4     // temperature sensor from ADC channel 4
+#define SENS5 5     // temperature sensor from ADC channel 5
+#define SENS6 6     // temperature sensor from ADC channel 6
+#define SENS7 7     // temperature sensor from ADC channel 7
+#define SENS8 8     // temperature sensor from ADC channel 8
+#define SENS9 9     // temperature sensor from ADC channel 9
+#define SENS10 10   // temperature sensor from ADC channel 10
+#define SENS11 11   // temperature sensor from ADC channel 11
+#define SENS12 12   // temperature sensor from ADC channel 12
+#define SENS13 13   // temperature sensor from ADC channel 13
+#define SENS14 14   // temperature sensor from ADC channel 14
+#define SENS15 15   // temperature sensor from ADC channel 15
+#define SENS16 16   // temperature sensor from ADC channel 16
 
 // ADC -> Temperature
-#define THERMISTORNOMINAL 10000
-#define TEMPERATURENOMINAL 25
-#define NUMSAMPLES 5
-#define BCOEFFICIENT 3950
-#define SERIESRESISTOR 10000
+#define THERMISTORNOMINAL 10000     // (▀̿ ̿̀ ﹏ ́▀̿ ̿ )
+#define TEMPERATURENOMINAL 25       // (≖̀ ﹏ ́≖)
+#define NUMSAMPLES 5                // number of samples to be averages for each adc output
+#define BCOEFFICIENT 3950           // god knows what this is
+#define SERIESRESISTOR 10000        // cause i sure as fuck dont
 
 const byte SENSOR[] = {SENS1, SENS2, SENS3, SENS4, SENS5, SENS6, SENS7, SENS8, SENS9, SENS10, SENS11, SENS12, SENS13, SENS14, SENS15, SENS16};
 

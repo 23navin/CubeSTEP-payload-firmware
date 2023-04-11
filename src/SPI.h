@@ -1,13 +1,12 @@
 /**
  * @file SPI.h
- * 
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
  * @brief Configure and control Flash memory over SPI.
  * @note Sourced from: https://www.tutorialspoint.com/esp32_for_iot/esp32_for_iot_spiffs_storage.htm
  * @note SPIFF reference: https://github.com/espressif/arduino-esp32/tree/master/libraries/SPIFFS
  * @note Fs reference: https://github.com/espressif/arduino-esp32/tree/master/libraries/FS
- */
+**/
 
 #ifndef _SPI_H_INCLUDED //idk why vscode is having an issue with this. it recognizes the endif and compiles without any problems :|
 #define _SPI_H_INCLUDED

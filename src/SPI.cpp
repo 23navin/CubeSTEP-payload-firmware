@@ -1,10 +1,9 @@
 /**
  * @file SPI.cpp
- * 
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
  * @brief Implementation of FileCore class
- */
+**/
 
 #include "SPI.h"
 
