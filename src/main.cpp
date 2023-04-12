@@ -143,9 +143,14 @@ void initSPI(FileCore *file_p) {
     //createLog();
 }
 
-void teleTester(Telemetry *tele, char *csventry) {
-    tele->SENS[3] = 888.0/7.0;
-    tele->toCSV(csventry, 3);
+void teleTester(Telemetry *tele, char* header, char *csventryT, char *csventryW, char *csventryS, char *csventryUS, char *csventry, char*csvTime) {
+    tele->random();
+    tele->TempToCSV(csventryT);
+    tele->WattToCSV(csventryW);
+    tele->TimeToCSV(csventryS, csventryUS);
+    tele->TimeToCSV(csvTime);
+    tele->headerCSV(header);
+    tele->ToCSV(csventry);
 }
 
 FileCore file;
@@ -163,10 +168,23 @@ void setup() {
     Serial.println("telemetry tests below");
 
     Telemetry active;
-    char tempout[char_length_temp];
+    char header[1000];
+    char tempout[type_size_temp];
+    char wattout[type_size_watt];
+    char secondOut[cell_size_time];
+    char usecondOut[cell_size_time];
+    char timeOut[type_size_time];
+    char Out[line_size];
 
-    teleTester(&active, tempout);
+    teleTester(&active, header, tempout, wattout, secondOut, usecondOut, Out, timeOut);
     Serial.println(tempout);
+    Serial.println(wattout);
+    Serial.println(secondOut);
+    Serial.println(usecondOut);
+    Serial.println(timeOut);
+    Serial.println(header);
+    Serial.println(Out);
+    Serial.println("-----\ndone!");
 
     // I2C slave setup
     /*

@@ -27,9 +27,8 @@ public:
     /* methods*/
 
     /**
-     * constructor
-     * 
-     * @note constructor calls mount() to access flash storage.
+     * @brief Construct a new File Core object
+     * @note constructor calls mount() to access file storage
      */
     FileCore();
     ~FileCore();
