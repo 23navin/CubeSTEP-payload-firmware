@@ -1,5 +1,5 @@
 /**
- * @file SPI.h
+ * @file File.h
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
  * @brief Configure and control Flash memory over SPI.
@@ -15,13 +15,13 @@
 #include "SPIFFS.h"
 
 #define FORMAT_SPIFFS_IF_FAILED true // Formats flash storage if it cannot be mounted
+
 /**
  * Flash storage core driver:
  *  - mount FAT flash storage
  *  - browse file directory
  *  - create, modify, and remove files
  */
-
 class FileCore {
 public:
     /* methods*/

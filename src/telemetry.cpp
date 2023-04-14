@@ -169,7 +169,7 @@ void Telemetry::headerCSV(char *LineChar) {
         strcat(LineBuffer, buffer);
     }
 
-    strncat(Line,"\n",2); // end line
+    strncat(LineBuffer,"\n",2); // end line
     //out
     strcpy(LineChar, LineBuffer);
 }

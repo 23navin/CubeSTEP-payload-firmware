@@ -6,11 +6,15 @@
  * //will add documentation later 
  */
 
+using namespace std;
 #include <Arduino.h>
 #include <Wire.h>
-#include "SPI.h"
+
+#include "File.h"
 #include "Telemetry.h"
-using namespace std;
+#include "Experiment.h"
+#include "I2C.h"
+#include "Sensor.h"
 
 // I2C bus
 #define SDA 1               // SDA pin
@@ -100,39 +104,14 @@ void checkSENS(float* tempArray[16]) {
     Serial.println("Tempuratures read");
 }
 
-void testSENS(float* tempArray[16]) {
-    
-
-}
-
-void FillChar(char output[], int input) {
-    itoa(input, output, 16);
-}
-
 void createLog(FileCore *file_p){
     file_p->writeFile(SPIFFS, "/log.csv", "TimeL, TimeS, PWM, SENS0, SENS1\n");
-}
-
-void packMessage(char* messageOut, char time[2], char temps[16], char wattage[2]) {
-    char data[20];
-
-    data[0] = time[0];
-    data[1] = time[1];
-
-    data[18] = wattage[0];
-    data[19] = wattage[1];
-
-    for(int i = 0; i < 16; i++) {
-        data[i+2] = temps[i];
-    }
-
-    messageOut = data;
 }
 
 void addLine(FileCore *file_p, char time[2], char temps[16], char wattage[2]) {
     char message[20];
     
-    packMessage(message, time, temps, wattage);
+    //packMessage(message, time, temps, wattage);
 
     file_p->appendFile(SPIFFS, "/log.csv", message);
     
@@ -154,15 +133,14 @@ void teleTester(Telemetry *tele, char* header, char *csventryT, char *csventryW,
 }
 
 FileCore file;
+ExperimentCore experiment;
+I2cCore slave;
+SensorCore sensor;
 
 void setup() {
     // Serial setup
     Serial.begin(115200);
-    Serial.println("Communication started");
-    Serial.println("starting!\n");
-
-    // SPI setup
-    //initSPI(&file);
+    Serial.println("Communication started\n");
 
     // Telemetry testing
     Serial.println("telemetry tests below");
@@ -184,7 +162,6 @@ void setup() {
     Serial.println(timeOut);
     Serial.println(header);
     Serial.println(Out);
-    Serial.println("-----\ndone!");
 
     // I2C slave setup
     /*
@@ -196,6 +173,7 @@ void setup() {
     return;
     }
     */
+    Serial.println("-----\nsetup testing done!");
 }
 
 void loop() {

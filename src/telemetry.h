@@ -37,6 +37,11 @@ typedef uint16_t    u16;    // 16-bit unsigned integer
 typedef int32_t     i32;    // 32-bit signed integer
 typedef uint32_t    u32;    // 32-bit unsigned integer
 
+/**
+ * Payload telemetry structure
+ *  - Contains time, temperatures, and wattage data
+ *  - Contains built-in functions to copy telemetry data to char[]s suitable for a .csv file
+ */
 struct Telemetry{
     /* member declarations */
     unsigned long Seconds;              // time: Seconds portion

@@ -1,11 +1,11 @@
 /**
- * @file SPI.cpp
+ * @file File.cpp
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
  * @brief Implementation of FileCore class
 **/
 
-#include "SPI.h"
+#include "File.h"
 
 FileCore::FileCore(){
     mount();
