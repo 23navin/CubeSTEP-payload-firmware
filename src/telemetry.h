@@ -13,6 +13,8 @@
 #include <cstring>
 #include <random> //for unit testing
 
+using namespace std;
+
 /* definitions */
 #define number_of_temp_sensors  16  // Number of temperatures sensors being read by adc
 #define number_of_watt_outs     2   // Number of discrete wattage outputs
@@ -129,5 +131,9 @@ struct Telemetry{
      * 
      */
     void random();
+
+    //void import(String inputString);
+
+    //void import(char *inputArray);
 };
 #endif // _telemetry_H_included

@@ -24,10 +24,10 @@ void FileCore::mount() {
     return;
 }
 
-void FileCore::listDir(fs::FS &fs, const char * dirname, uint8_t levels){
+void FileCore::listDir(const char * dirname, uint8_t levels){
         Serial.printf("Listing directory: %s\r\n", dirname);
 
-        File root = fs.open(dirname);
+        File root = SPIFFS.open(dirname);
         if(!root){
             Serial.println("- failed to open directory");
             return;
@@ -43,7 +43,7 @@ void FileCore::listDir(fs::FS &fs, const char * dirname, uint8_t levels){
                 Serial.print("  DIR : ");
                 Serial.println(file.name());
                 if(levels){
-                    listDir(fs, file.path(), levels -1);
+                    listDir(file.path(), levels -1);
                 }
             } else {
                 Serial.print("  FILE: ");
@@ -55,10 +55,10 @@ void FileCore::listDir(fs::FS &fs, const char * dirname, uint8_t levels){
         }
     }
 
-void FileCore::readFile(fs::FS &fs, const char * path){
+void FileCore::readFile(const char * path){
     Serial.printf("Reading file: %s\r\n", path);
 
-    File file = fs.open(path);
+    File file = SPIFFS.open(path);
     if(!file || file.isDirectory()){
         Serial.println("- failed to open file for reading");
         return;
@@ -71,10 +71,31 @@ void FileCore::readFile(fs::FS &fs, const char * path){
     file.close();
 }
 
-void FileCore::writeFile(fs::FS &fs, const char * path, const char * message){
+std::vector<String> FileCore::loadFile(const char *path){
+    Serial.printf("Reading file: %s\r\n", path);
+
+    File file = SPIFFS.open(path);
+    if(!file || file.isDirectory()){
+        Serial.println("- failed to open file for reading");
+        //return;
+    }
+
+    vector<String> lines;
+    String buffer;
+
+    while(file.available()) {
+        lines.push_back(file.readStringUntil('\n'));
+    }
+    
+    file.close();
+    
+    return lines;
+}
+
+void FileCore::writeFile(const char * path, const char * message){
     Serial.printf("Writing file: %s\r\n", path);
 
-    File file = fs.open(path, FILE_WRITE);
+    File file = SPIFFS.open(path, FILE_WRITE);
     if(!file){
         Serial.println("- failed to open file for writing");
         return;
@@ -87,10 +108,10 @@ void FileCore::writeFile(fs::FS &fs, const char * path, const char * message){
     file.close();
 }
 
-void FileCore::appendFile(fs::FS &fs, const char * path, const char * message){
+void FileCore::appendFile(const char * path, const char * message){
     Serial.printf("Appending to file: %s\r\n", path);
 
-    File file = fs.open(path, FILE_APPEND);
+    File file = SPIFFS.open(path, FILE_APPEND);
     if(!file){
         Serial.println("- failed to open file for appending");
         return;
@@ -103,30 +124,30 @@ void FileCore::appendFile(fs::FS &fs, const char * path, const char * message){
     file.close();
 }
 
-void FileCore::renameFile(fs::FS &fs, const char * path1, const char * path2){
+void FileCore::renameFile(const char * path1, const char * path2){
     Serial.printf("Renaming file %s to %s\r\n", path1, path2);
-    if (fs.rename(path1, path2)) {
+    if (SPIFFS.rename(path1, path2)) {
         Serial.println("- file renamed");
     } else {
         Serial.println("- rename failed");
     }
 }
 
-void FileCore::deleteFile(fs::FS &fs, const char * path){
+void FileCore::deleteFile(const char * path){
     Serial.printf("Deleting file: %s\r\n", path);
-    if(fs.remove(path)){
+    if(SPIFFS.remove(path)){
         Serial.println("- file deleted");
     } else {
         Serial.println("- delete failed");
     }
 }
 
-void FileCore::testFileIO(fs::FS &fs, const char * path){
+void FileCore::testFileIO(const char * path){
     Serial.printf("Testing file I/O with %s\r\n", path);
 
     static uint8_t buf[512];
     size_t len = 0;
-    File file = fs.open(path, FILE_WRITE);
+    File file = SPIFFS.open(path, FILE_WRITE);
     if(!file){
         Serial.println("- failed to open file for writing");
         return;
@@ -146,7 +167,7 @@ void FileCore::testFileIO(fs::FS &fs, const char * path){
     Serial.printf(" - %u bytes written in %u ms\r\n", 2048 * 512, end);
     file.close();
 
-    file = fs.open(path);
+    file = SPIFFS.open(path);
     start = millis();
     end = start;
     i = 0;

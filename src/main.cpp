@@ -6,6 +6,7 @@
  * //will add documentation later 
  */
 
+
 using namespace std;
 #include <Arduino.h>
 #include <Wire.h>
@@ -104,16 +105,16 @@ void checkSENS(float* tempArray[16]) {
     Serial.println("Tempuratures read");
 }
 
-void createLog(FileCore *file_p){
-    file_p->writeFile(SPIFFS, "/log.csv", "TimeL, TimeS, PWM, SENS0, SENS1\n");
+void createLog(FileCore *file_p, Telemetry *tele){
+    char header[1000];
+    tele->headerCSV(header);
+    file_p->writeFile("/log.csv", header);
 }
 
-void addLine(FileCore *file_p, char time[2], char temps[16], char wattage[2]) {
-    char message[20];
-    
-    //packMessage(message, time, temps, wattage);
-
-    file_p->appendFile(SPIFFS, "/log.csv", message);
+void addLine(FileCore *file_p, Telemetry *tele) {
+    char line[line_size];
+    tele->ToCSV(line);
+    file_p->appendFile("/log.csv", line);
     
 }
 
@@ -122,30 +123,9 @@ void initSPI(FileCore *file_p) {
     //createLog();
 }
 
-void teleTester(Telemetry *tele, char* header, char *csventryT, char *csventryW, char *csventryS, char *csventryUS, char *csventry, char*csvTime) {
+void teleTester(Telemetry *tele, FileCore *file_p) {
     tele->random();
-    tele->TempToCSV(csventryT);
-    tele->WattToCSV(csventryW);
-    tele->TimeToCSV(csventryS, csventryUS);
-    tele->TimeToCSV(csvTime);
-    tele->headerCSV(header);
-    tele->ToCSV(csventry);
-}
 
-FileCore file;
-ExperimentCore experiment;
-I2cCore slave;
-SensorCore sensor;
-
-void setup() {
-    // Serial setup
-    Serial.begin(115200);
-    Serial.println("Communication started\n");
-
-    // Telemetry testing
-    Serial.println("telemetry tests below");
-
-    Telemetry active;
     char header[1000];
     char tempout[type_size_temp];
     char wattout[type_size_watt];
@@ -154,7 +134,14 @@ void setup() {
     char timeOut[type_size_time];
     char Out[line_size];
 
-    teleTester(&active, header, tempout, wattout, secondOut, usecondOut, Out, timeOut);
+    tele->TempToCSV(tempout);
+    tele->WattToCSV(wattout);
+    tele->TimeToCSV(secondOut, usecondOut);
+    tele->TimeToCSV(timeOut);
+    tele->headerCSV(header);
+    tele->ToCSV(Out);
+
+    
     Serial.println(tempout);
     Serial.println(wattout);
     Serial.println(secondOut);
@@ -162,6 +149,43 @@ void setup() {
     Serial.println(timeOut);
     Serial.println(header);
     Serial.println(Out);
+}
+
+void fileTester(FileCore *file_p) {
+    vector<String> recovered;
+    recovered = file_p->loadFile("/log.csv");
+    
+    Serial.println(recovered.size());
+    Serial.println(recovered[0]);
+}
+
+FileCore storage;
+ExperimentCore experiment;
+I2cCore slave;
+SensorCore sensor;
+
+void setup() {
+    // Serial setup
+    Serial.begin(115200);
+    delay(1000);
+    Serial.println("Communication started\n");
+
+    // Telemetry testing
+    Serial.println("telemetry tests below");
+
+    Telemetry active;
+    teleTester(&active, &storage);
+
+    //File testing
+    Serial.println("file tests below");
+    storage.mount();
+    storage.listDir("/", 0);
+
+    //createLog(&file, &active);
+    //file.listDir("/",0);
+    //addLine(&storage, &active);
+    fileTester(&storage);
+
 
     // I2C slave setup
     /*

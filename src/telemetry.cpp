@@ -202,3 +202,4 @@ void Telemetry::random() {
         Watt[i] = static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(12.0)));
     }
 }
+
