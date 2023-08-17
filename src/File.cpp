@@ -14,8 +14,8 @@ FileCore::FileCore(){
 FileCore::~FileCore(){
 } //should be unused
 
-void FileCore::mount() {
-    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
+void FileCore::mount(){
+    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
         Serial.println("SPIFFS Mount Failed");
         return;
     }
@@ -45,7 +45,7 @@ void FileCore::listDir(const char * dirname, uint8_t levels){
                 if(levels){
                     listDir(file.path(), levels -1);
                 }
-            } else {
+            }else{
                 Serial.print("  FILE: ");
                 Serial.print(file.name());
                 Serial.print("\tSIZE: ");
@@ -83,7 +83,7 @@ std::vector<String> FileCore::loadFile(const char *path){
     vector<String> lines;
     String buffer;
 
-    while(file.available()) {
+    while(file.available()){
         lines.push_back(file.readStringUntil('\n'));
     }
     
@@ -126,7 +126,7 @@ void FileCore::appendFile(const char * path, const char * message){
 
 void FileCore::renameFile(const char * path1, const char * path2){
     Serial.printf("Renaming file %s to %s\r\n", path1, path2);
-    if (SPIFFS.rename(path1, path2)) {
+    if (SPIFFS.rename(path1, path2)){
         Serial.println("- file renamed");
     } else {
         Serial.println("- rename failed");

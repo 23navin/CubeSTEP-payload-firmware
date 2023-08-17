@@ -1,5 +1,5 @@
 /**
- * @file telemetry.cpp
+ * @file Telemetry.cpp
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
  * @brief Implementation of Telemetry structure
@@ -7,11 +7,18 @@
 
 #include "Telemetry.h"
 
-Telemetry::Telemetry() {
-    clear(); //sets to default values
+unsigned long epoch(){ //get time for srand seed
+    time_t now;
+    time(&now);
+    return now;
 }
 
-void Telemetry::ToCSV(char *LineChar) {
+Telemetry::Telemetry(){
+    clear(); //sets to default values
+    srand(epoch()); //random seed for testing
+}
+
+void Telemetry::ToCSV(char *LineChar){
     char Line[line_size]; // "<time>,<watt>,<temp>\n\0"
 
     //time
@@ -39,10 +46,10 @@ void Telemetry::ToCSV(char *LineChar) {
     strcpy(LineChar, Line);
 }
 
-void Telemetry::TimeToCSV(char *TimeChar) {
+void Telemetry::TimeToCSV(char *TimeChar){
     char Buffer[type_size_time]; // "<sec>,<usec>\0"
-    char SecBuffer[cell_size_time]; // "<sec>\0"
-    char uSecBuffer[cell_size_time]; // "<usec>\0"
+    char SecBuffer[cell_size_epoch]; // "<sec>\0"
+    char uSecBuffer[cell_size_mSecond]; // "<usec>\0"
 
     TimeToCSV(SecBuffer, uSecBuffer);
 
@@ -50,80 +57,109 @@ void Telemetry::TimeToCSV(char *TimeChar) {
     strcpy(TimeChar, Buffer);
 }
 
-void Telemetry::TimeToCSV(char *SecondsChar, char*uSecondsChar) {
-    char Buffer[cell_size_time]; // "<sec>\0"
-    char uBuffer[cell_size_time]; // <usec>\0
+void Telemetry::TimeToCSV(char *SecondsChar, char*uSecondsChar){
+    char Buffer[cell_size_epoch]; // "<sec>\0"
+    char uBuffer[cell_size_mSecond]; // <usec>\0
 
-    if((SecondsChar < 0) && (uSecondsChar < 0)) { //need to increase robustness/error checking
+    if((SecondsChar < 0) && (uSecondsChar < 0)){ //need to increase robustness/error checking
         strcpy(SecondsChar, "XXXXXXXX");
         strcpy(uSecondsChar, "XXXXXXXX");
     }
     else {
-        int ret = snprintf(Buffer, cell_size_time, "%.8x", Seconds); // todo: add definitions
-        if(ret > 0) {
+        int ret = snprintf(Buffer, cell_size_epoch, "%.8x", Seconds); // todo: add definitions
+        if(ret > 0){
             strcpy(SecondsChar, Buffer);
         }
 
-        ret = snprintf(uBuffer, cell_size_time, "%.8x", uSeconds); // todo: add definitions
-        if(ret > 0) {
+        ret = snprintf(uBuffer, cell_size_mSecond, "%.3x", mSeconds); // todo: add definitions
+        if(ret > 0){
             strcpy(uSecondsChar, uBuffer);
         }
     }
 }
 
-void Telemetry::TempToCSV(char *TempChar) {
+void Telemetry::TempToCSV(char *TempChar){
     char Buffer[type_size_temp]; // "<sens0>,<sens1>,...\0"
-    if(Sens[0] < 1.0) {
-        strcpy(Buffer, "XXX.XXX"); // todo: need to make function with respect to definitions
-    }
-    else {
-        snprintf(Buffer, cell_size_temp, "%7.3f", Sens[0]);
-    }
 
-    for(int i=1; i<number_of_temp_sensors; i++) {
+    snprintf(Buffer, cell_size_temp, "%7f", Sens[0]);
+
+    for(int i=1; i<number_of_temp_sensors; i++){
         char SensBuffer[cell_size_temp];
         char CellBuffer[cell_size_temp+1];
-        if(Sens[i] < 1.0) {
-            strncat(Buffer, ",XXX.XXX", cell_size_temp+1);
-        }
-        else {
-            TempToCSV(SensBuffer, i);
-            snprintf(CellBuffer, cell_size_temp+1, ",%s",SensBuffer);
-            strncat(Buffer, CellBuffer, cell_size_temp+1);
-        }
+        
+        TempToCSV(SensBuffer, i);
+        snprintf(CellBuffer, cell_size_temp+1, ",%s",SensBuffer);
+        strncat(Buffer, CellBuffer, cell_size_temp+1);
     }
 
     strcpy(TempChar, Buffer);
 }
 
-void Telemetry::TempToCSV(char *CellChar, int channel) {
+void Telemetry::TempToCSV(char *CellChar, int channel){
     char Buffer[cell_size_temp];
     
-    if(Sens[channel] < 1.0) {
-        strcpy(CellChar, "XXX.XXX"); // todo: need to make function with respect to definitions
-    }
-    else {
-        int ret = snprintf(Buffer, cell_size_temp, "%7.3f", Sens[channel]); // todo: add definitions
+    int ret = snprintf(Buffer, cell_size_temp, "%7f", Sens[channel]); // todo: add definitions
 
-        if(ret > 0) {
-            strcpy(CellChar, Buffer);
-        }
+    if(ret > 0){
+        strcpy(CellChar, Buffer);
     }
 }
 
-void Telemetry::WattToCSV(char *WattChar) {
+// todo: add option to use XXX.XXX if < 0 using preprocessor
+
+// void Telemetry::TempToCSV(char *TempChar){
+//     char Buffer[type_size_temp]; // "<sens0>,<sens1>,...\0"
+//     if(Sens[0] < 1.0){
+//         strcpy(Buffer, "XXX.XXX"); // todo: need to make function with respect to definitions
+//     }
+//     else {
+//         snprintf(Buffer, cell_size_temp, "%7.3f", Sens[0]);
+//     }
+
+//     for(int i=1; i<number_of_temp_sensors; i++){
+//         char SensBuffer[cell_size_temp];
+//         char CellBuffer[cell_size_temp+1];
+//         if(Sens[i] < 1.0){
+//             strncat(Buffer, ",XXX.XXX", cell_size_temp+1);
+//         }
+//         else {
+//             TempToCSV(SensBuffer, i);
+//             snprintf(CellBuffer, cell_size_temp+1, ",%s",SensBuffer);
+//             strncat(Buffer, CellBuffer, cell_size_temp+1);
+//         }
+//     }
+
+//     strcpy(TempChar, Buffer);
+// }
+
+// void Telemetry::TempToCSV(char *CellChar, int channel){
+//     char Buffer[cell_size_temp];
+    
+//     if(Sens[channel] < 1.0){
+//         strcpy(CellChar, "XXX.XXX"); // todo: need to make function with respect to definitions
+//     }
+//     else {
+//         int ret = snprintf(Buffer, cell_size_temp, "%7.3f", Sens[channel]); // todo: add definitions
+
+//         if(ret > 0){
+//             strcpy(CellChar, Buffer);
+//         }
+//     }
+// }
+
+void Telemetry::WattToCSV(char *WattChar){
     char Buffer[type_size_watt];
-    if(Watt[0] < 0.0) {
+    if(Watt[0] < 0.0){
         strcpy(Buffer, "XX.XXX"); // todo: need to make function with respect to definitions
     }
     else {
         snprintf(Buffer, cell_size_watt, "%6.3f", Watt[0]);
     }
 
-    for(int i=1; i<number_of_watt_outs; i++) {
+    for(int i=1; i<number_of_watt_outs; i++){
         char WattBuffer[cell_size_watt];
         char CellBuffer[cell_size_watt+1];
-        if(Watt[i] < 0.0) {
+        if(Watt[i] < 0.0){
             strncat(Buffer, ",XX.XXX", cell_size_watt+1);
         }
         else {
@@ -136,34 +172,34 @@ void Telemetry::WattToCSV(char *WattChar) {
     strcpy(WattChar, Buffer);
 }
 
-void Telemetry::WattToCSV(char *CellChar, int channel) {
+void Telemetry::WattToCSV(char *CellChar, int channel){
     char Buffer[cell_size_watt];
 
-    if(Watt[channel] < 0) {
+    if(Watt[channel] < 0){
         strcpy(CellChar, "XX.XXX");
     }
     else {
         int ret = snprintf(Buffer, cell_size_watt, "%6.3f", Watt[channel]); // todo: add definitions
-        if(ret > 0) {
+        if(ret > 0){
             strcpy(CellChar, Buffer);
         }
     }
 }
 
-void Telemetry::headerCSV(char *LineChar) {
+void Telemetry::headerCSV(char *LineChar){
     char LineBuffer[1000];
 
     //time
     strcpy(LineBuffer, "system_time (seconds),system_time (micro_seconds)");
     //temp
-    for(int i=0; i<number_of_temp_sensors; i++) {
+    for(int i=0; i<number_of_temp_sensors; i++){
         char buffer[100];
         sprintf(buffer, ",temp_sensor_%d (degrees_kelvin)", i);
         strcat(LineBuffer, buffer);
     }
 
     //watt
-    for(int i=0; i<number_of_watt_outs; i++) {
+    for(int i=0; i<number_of_watt_outs; i++){
         char buffer[100];
         sprintf(buffer, ",watt_out_%d (volts)", i);
         strcat(LineBuffer, buffer);
@@ -174,32 +210,54 @@ void Telemetry::headerCSV(char *LineChar) {
     strcpy(LineChar, LineBuffer);
 }
 
-void Telemetry::clear() {
-    for(int i = 0; i < number_of_temp_sensors; i++) {
+void Telemetry::clear(){
+    for(int i = 0; i < number_of_temp_sensors; i++){
         Sens[i] = 0.0;
     }
 
-    for(int i = 0; i < number_of_watt_outs; i++) {
+    for(int i = 0; i < number_of_watt_outs; i++){
         Watt[i] = 0.0;
     }
 
-    Seconds = 0; // todo: change to set current time
-    uSeconds = 0;
+    Seconds = 0;
+    mSeconds = 0;
 }
 
-void Telemetry::random() {
+void Telemetry::random(ESP32Time *realtime){
+    delay(rand() % 5000);
+
     //time
-    Seconds = (rand() % 0x100000000);
-    uSeconds = (rand() % 0x100000000);
+    Seconds = realtime->getEpoch();
+    mSeconds = realtime->getMillis();
 
     //temp
-    for(int i=0; i < number_of_temp_sensors; i++) {
+    for(int i=0; i < number_of_temp_sensors; i++){
         Sens[i] = 1.0 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(500.0-1.0)));
     }
 
     //watt
-    for(int i=0; i < number_of_watt_outs; i++) {
+    for(int i=0; i < number_of_watt_outs; i++){
         Watt[i] = static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(12.0)));
     }
 }
 
+void Telemetry::setTemp(int sensor, float temperature){
+    Sens[sensor] = temperature;
+}
+
+void Telemetry::setTemp(float *temp_array[]){
+    for(int i = 0; i < number_of_temp_sensors; i++){
+        float buffer = *temp_array[i];
+        Sens[i] = buffer;
+    }
+}
+
+void Telemetry::setTime(){
+    Seconds = realtime.getEpoch();
+    mSeconds = realtime.getMillis();
+}
+
+void Telemetry::setTime(unsigned long epoch, unsigned int milli){
+    Seconds = epoch;
+    mSeconds = milli;
+}

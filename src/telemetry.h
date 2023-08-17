@@ -2,7 +2,7 @@
  * @file telemetry.h
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
- * @brief stores and manages telemetry data for the payload processor
+ * @brief Stores and manages telemetry data for the payload processor
 **/
 
 #ifndef _telemetry_H_included
@@ -11,19 +11,21 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <cstring>
-#include <random> //for unit testing
+#include <random> //for testing
+#include "ESP32Time.h"
 
 using namespace std;
 
-/* definitions */
+//Char Length Definitions
 #define number_of_temp_sensors  16  // Number of temperatures sensors being read by adc
 #define number_of_watt_outs     2   // Number of discrete wattage outputs
 
-#define cell_size_time          9   // Length of char* to hold each time value in .csv
+#define cell_size_epoch         9   // Length of char* to hold each time value in .csv
+#define cell_size_mSecond       4   // Length of char* to hold each time value in .csv
 #define cell_size_temp          8   // Length of char* to hold each temp value in .csv
 #define cell_size_watt          7   // Length of char* to hold each wattage value in .csv
 
-#define type_size_time          (2 * cell_size_time + 2)  // Length of char* to hold all time values in .csv
+#define type_size_time          (cell_size_epoch + cell_size_mSecond + 2)  // Length of char* to hold all time values in .csv
 #define type_size_temp          (number_of_temp_sensors * cell_size_temp + number_of_temp_sensors)   // Length of char* to hold all temp values in .csv
 #define type_size_watt          (number_of_watt_outs * cell_size_watt + number_of_watt_outs)   // Length of char* to hold all watt values in .csv
 
@@ -32,24 +34,19 @@ using namespace std;
 #define char_precision_temp     3   // Precision of char* to hold temp value in .csv
 #define char_precision_watt     3   // Precision of char* to hold wattage value in .csv
 
-typedef int8_t      i8;     // 8-bit signed integer
-typedef uint8_t     u8;     // 8-bit unsigned integer
-typedef int16_t     i16;    // 16-bit signed integer
-typedef uint16_t    u16;    // 16-bit unsigned integer
-typedef int32_t     i32;    // 32-bit signed integer
-typedef uint32_t    u32;    // 32-bit unsigned integer
-
 /**
- * Payload telemetry structure
- *  - Contains time, temperatures, and wattage data
- *  - Contains built-in functions to copy telemetry data to char[]s suitable for a .csv file
+ * @brief Payload telemetry structure
+ * @note - Contains time, temperatures, and wattage data
+ * @note - Contains built-in functions to copy telemetry data to char[]s suitable for a .csv file
  */
 struct Telemetry{
     /* member declarations */
-    unsigned long Seconds;              // time: Seconds portion
-    unsigned long uSeconds;             // time: micro-Seconds portion
+    unsigned long Seconds; // time: Seconds portion
+    unsigned int mSeconds; // time: micro-Seconds portion
     float Sens[number_of_temp_sensors]; // temperature array
-    float Watt[number_of_watt_outs];    // wattage array
+    float Watt[number_of_watt_outs]; // wattage array; todo: change to duty cycle
+
+    ESP32Time realtime; //for testing
 
     /* methods*/
 
@@ -130,7 +127,37 @@ struct Telemetry{
      * @note Uses rand()
      * 
      */
-    void random();
+    void random(ESP32Time *realtime);
+
+    /**
+     * @brief Set a single temperature
+     * 
+     * @param sensor
+     * @param temperature 
+     */
+    void setTemp(int sensor, float temperature);
+
+    /**
+     * @brief Set all temperatures
+     * 
+     * @param temp_array pointer to an array of temperatures
+     */
+    void setTemp(float *temp_array[]);
+
+    /**
+     * @brief Set time to realtime
+     * 
+     */
+    void setTime();
+
+    /**
+     * @brief Set time to parameter
+     * 
+     * @param epoch seconds
+     * @param milli milliseconds
+     */
+    void setTime(unsigned long epoch, unsigned int milli);
+
 
     //void import(String inputString);
 

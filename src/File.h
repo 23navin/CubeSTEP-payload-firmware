@@ -8,8 +8,8 @@
  * @note Fs reference: https://github.com/espressif/arduino-esp32/tree/master/libraries/FS
 **/
 
-#ifndef _SPI_H_INCLUDED //idk why vscode is having an issue with this. it recognizes the endif and compiles without any problems :|
-#define _SPI_H_INCLUDED
+#ifndef _file_H_INCLUDED
+#define _file_H_INCLUDED
 
 #include "Fs.h"
 #include "SPIFFS.h"
@@ -21,15 +21,13 @@ using namespace std;
 #define FORMAT_SPIFFS_IF_FAILED true // Formats flash storage if it cannot be mounted
 
 /**
- * Flash storage core driver:
- *  - mount FAT flash storage
- *  - browse file directory
- *  - create, modify, and remove files
+ * @brief Flash storage core driver:
+ * @note - mount FAT flash storage
+ * @note - browse file directory
+ * @note - create, modify, and remove files
  */
 class FileCore {
 public:
-    /* methods*/
-
     /**
      * @brief Construct a new File Core object
      * @note constructor calls mount() to access file storage
@@ -97,29 +95,6 @@ public:
      * @param path location of benchmark file
      */
     void testFileIO(const char * path);
-    
 };
-#endif // _SPI_H_INCLUDED
 
-
-/*
-    application demo
-    https://www.tutorialspoint.com/esp32_for_iot/esp32_for_iot_spiffs_storage.htm
-
-
-    Serial.begin(115200);
-    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-        Serial.println("SPIFFS Mount Failed");
-        return;
-    }
-    listDir(SPIFFS, "/", 0);
-    writeFile(SPIFFS, "/hello.txt", "Hello ");
-    appendFile(SPIFFS, "/hello.txt", "World!\r\n");
-    readFile(SPIFFS, "/hello.txt");
-    renameFile(SPIFFS, "/hello.txt", "/foo.txt");
-    readFile(SPIFFS, "/foo.txt");
-    deleteFile(SPIFFS, "/foo.txt");
-    testFileIO(SPIFFS, "/test.txt");
-    deleteFile(SPIFFS, "/test.txt");
-    Serial.println( "Test complete" );
-*/
+#endif // _file_H_INCLUDED
