@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.v": "verilog",
+        "cmath": "cpp",
+        "cstddef": "cpp",
+        "limits": "cpp"
+    }
+}

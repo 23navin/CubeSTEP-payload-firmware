@@ -1,157 +1,202 @@
-#include <Arduino.h>
-#include <Wire.h>
-#include "SPI.h"
+/**
+ * @file main.cpp
+ * @author Benjamin Navin (bnjames@cpp.edu)
+ * 
+ * @brief ESP32 Payload Processor firmware
+ * //will add documentation later 
+*/
+
 using namespace std;
+#include "ESP32Time.h"
+#include "esp_log.h"
+#include "esp_err.h"
 
-// I2C bus
-#define SDA 1
-#define SCL 2
-#define SLAVE_ADDRESS 0x04
-#define ANSWER_SIZE 5
+#include "File.h"
+#include "Telemetry.h"
+#include "Sensor.h"
+#include "Heater.h"
+#include "I2C.h"
 
-// ADC pins
-#define SENS1 1
-#define SENS2 2
-#define SENS3 3
-#define SENS4 4
-#define SENS5 5
-#define SENS6 6
-#define SENS7 7
-#define SENS8 8
-#define SENS9 9
-#define SENS10 10
-#define SENS11 11
-#define SENS12 12
-#define SENS13 13
-#define SENS14 14
-#define SENS15 15
-#define SENS16 16
+#define on 1 // True
+#define off 0 // False
+#define one_second (1000) //one thousand milli-seconds
 
-// ADC -> Temperature
-#define THERMISTORNOMINAL 10000
-#define TEMPERATURENOMINAL 25
-#define NUMSAMPLES 5
-#define BCOEFFICIENT 3950
-#define SERIESRESISTOR 10000
+//Logging
+#define TAGI "payload_INFO"
 
-// FAT System
-#define FORMAT_SPIFFS_IF_FAILED true
+// I2C bus -> move into i2c.h
+#define SDA 1               // SDA pin
+#define SCL 2               // SCL pin
+#define SLAVE_ADDRESS 0x04  // device address
+#define ANSWER_SIZE 5       // length of message that is sent over I2C
 
-const byte SENSOR[] = {SENS1, SENS2, SENS3, SENS4, SENS5, SENS6, SENS7, SENS8, SENS9, SENS10, SENS11, SENS12, SENS13, SENS14, SENS15, SENS16};
+//UART
+#define UART_BAUD_RATE 115200 //default baud rate
 
-String response;
+// FSM setup
+enum class modes {
+    Safety,
+    LowPower,
+    Idle,
+    Experiment,
+    Communicate
+};
 
-// I2C bus
-void ReceiveI2C(int length) {
-    while(0 < Wire.available()) {
-        byte x = Wire.read();
-    }
+/**
+ * @brief Sets a time object to the system time when this build was compiled
+ * @note Useful as a baseline time variable
+ * 
+ * @param object ESP32Time pointer
+ */
+void setTimeToCompile(ESP32Time *object)
+{
+    char s_month[5];
+    int year;
+    struct tm t;
+    static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    sscanf(__DATE__, "%s %d %d", s_month, &t.tm_mday, &year);
+    sscanf(__TIME__, "%2d %*c %2d %*c %2d", &t.tm_hour, &t.tm_min, &t.tm_sec);
+    t.tm_mon = (strstr(month_names, s_month) - month_names) / 3;    
+    t.tm_year = year - 1900;   
 
-    Serial.println("I2C Received!");
+    object->setTime(mktime(&t));
 }
 
-void WritetoI2C() {
-    byte message[ANSWER_SIZE];
-
-    for(byte i=0; i<ANSWER_SIZE; i++) {
-        message[i] = (byte)response.charAt(i);
-    }
-
-    Wire.write(message, sizeof(message));
-
-    Serial.println("I2C Sent!");
+/**
+ * @brief Creates a Log object
+ * @note for testing
+ * 
+ * @param file_p 
+ * @param tele 
+ */
+void createLog(FileCore *file_p, Telemetry *tele){
+    char header[1000];
+    tele->headerCSV(header);
+    file_p->writeFile("/log.csv", header);
 }
 
-// Record Temps
-float ReadADC(byte pin){
-    float reading = analogRead(pin);
-    if(reading < 1 || reading > 4095) return 0;
-    return -0.000000000000016 * pow(reading,4) + 0.000000000118171 * pow(reading,3)- 0.000000301211691 * pow(reading,2)+ 0.001109019271794 * reading + 0.034143524634089;
+void deleteLog(FileCore *file_p) {
+    file_p->deleteFile("/log.csv");
 }
 
-void checkSENS(float* tempArray[16]) {
-    //sample 16 sensors
-    for(int i=0; i<16; i++) {
-        double temp = 0;
-
-        //sample ADC
-        for(int j=0; j<NUMSAMPLES; j++) {
-            temp += ReadADC(SENSOR[j]);
-        }
-        temp /= NUMSAMPLES; // averaged sample
-        temp = 1023 / temp - 1;       // sample -> resistance
-        temp = SERIESRESISTOR / temp; //
-        temp = temp / THERMISTORNOMINAL; // R/Ro
-        temp = log(temp); // ln(R/Ro)
-        temp /= BCOEFFICIENT; // 1/B * ln(R/Ro)
-        temp += 1.0 / (TEMPERATURENOMINAL + 273.15); // + (1/To)
-        temp = 1.0 / temp; // Invert
-        temp -= 273.15; // Convert
-
-        *tempArray[i]=temp; //send to array
-    }
-
-    Serial.println("Tempuratures read");
-}
-
-void testSENS(float* tempArray[16]) {
-    
-
-}
-
-void FillChar(char output[], int input) {
-    itoa(input, output, 16);
-}
-
-void createLog(FileCore *file_p){
-    file_p->writeFile(SPIFFS, "/log.csv", "TimeL, TimeS, PWM, SENS0, SENS1\n");
-}
-
-void packMessage(char* messageOut, char time[2], char temps[16], char wattage[2]) {
-    char data[20];
-
-    data[0] = time[0];
-    data[1] = time[1];
-
-    data[18] = wattage[0];
-    data[19] = wattage[1];
-
-    for(int i = 0; i < 16; i++) {
-        data[i+2] = temps[i];
-    }
-
-    messageOut = data;
-}
-
-void addLine(FileCore *file_p, char time[2], char temps[16], char wattage[2]) {
-    char message[20];
-    
-    packMessage(message, time, temps, wattage);
-
-    file_p->appendFile(SPIFFS, "/log.csv", message);
+/**
+ * @brief Adds line to file
+ * @note for testing
+ * 
+ * @param file_p 
+ * @param tele 
+ */
+void addLine(FileCore *file_p, Telemetry *tele){
+    char line[line_size];
+    tele->ToCSV(line);
+    file_p->appendFile("/log.csv", line);
     
 }
 
-void initSPI(FileCore *file_p) {
-    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
-        Serial.println("SPIFFS Mount Failed");
-        return;
-    }
-    
+/**
+ * @brief Initializes file system
+ * @note for testing
+ * 
+ * @param file_p 
+ */
+void initSPI(FileCore *file_p){
+    file_p->mount();
     //createLog();
 }
 
-FileCore file();
+// void teleTester(Telemetry *tele, FileCore *file_p){
+//     tele->random();
+//     char header[1000];
+//     char tempout[type_size_temp];
+//     char wattout[type_size_watt];
+//     char secondOut[cell_size_epoch];
+//     char msecondOut[cell_size_mSecond];
+//     char timeOut[type_size_time];
+//     char Out[line_size];
 
-void setup() {
+//     tele->TempToCSV(tempout);
+//     tele->WattToCSV(wattout);
+//     tele->TimeToCSV(secondOut, msecondOut);
+//     tele->TimeToCSV(timeOut);
+//     tele->headerCSV(header);
+//     tele->ToCSV(Out);
+
+    
+//     Serial.println(tempout);
+//     Serial.println(wattout);
+//     Serial.println(secondOut);
+//     Serial.println(msecondOut);
+//     Serial.println(timeOut);
+//     Serial.println(header);
+//     Serial.println(Out);
+// }
+
+void fileTester(FileCore *file_p){
+    vector<String> recovered;
+    recovered = file_p->loadFile("/log.csv");
+    
+    Serial.println(recovered.size());
+    for(int i=0; i < recovered.size(); i++) {
+        char line_buffer[line_size] ;
+        sprintf(line_buffer, "Line #%d", i);
+        Serial.println(line_buffer);
+        Serial.println(recovered[i]);
+    }
+}
+
+void internalSystemCheck();
+
+void checkI2C();
+
+void checkTime();
+
+ESP32Time rtc;
+FileCore storage;
+SensorCore sensor;
+HeaterCore heater;
+I2cCore slave;
+
+void setup(){
+    //set internal rtc clock
+    setTimeToCompile(&rtc);
+    sensor.init(&rtc);
+
     // Serial setup
-    Serial.begin(115200);
+    Serial.begin(UART_BAUD_RATE);
+    delay(1000);
+    char jog[64];
+    sprintf(jog, "Communication started over UART @ %i", UART_BAUD_RATE);
     Serial.println("Communication started");
-    Serial.println("starting!\n");
 
-    // SPI setup
-    initSPI(&file);
-    //appendFile(SPIFFS, "/log.csv");
+    
+    //Timestamp
+    char timestamp[64];
+    sprintf(timestamp, "System time is %i/%i\n", rtc.getEpoch(), rtc.getMillis());
+    Serial.println(timestamp);
+    
+    // Telemetry testing
+    // Serial.println("telemetry tests below");
+
+    // Telemetry active, capture;
+
+    // //File testing
+    // Serial.println("file tests below");
+    // storage.listDir("/", 0);
+    // createLog(&storage, &active);
+    // storage.listDir("/", 0);
+
+    // sensor.snapshot(&capture);
+    // addLine(&storage, &capture);
+
+    // active.random(&rtc);
+    // addLine(&storage, &active);
+
+    // fileTester(&storage);
+
+    // storage.listDir("/", 0);
+    // deleteLog(&storage);
+    // storage.listDir("/", 0);
+
 
     // I2C slave setup
     /*
@@ -162,20 +207,33 @@ void setup() {
     Serial.println("SPIFFS Mount Failed");
     return;
     }
-
-    listDir(SPIFFS, "/", 0);
-    writeFile(SPIFFS, "/hello.txt", "Hello ");
-    appendFile(SPIFFS, "/hello.txt", "World!\r\n");
-    readFile(SPIFFS, "/hello.txt");
-    renameFile(SPIFFS, "/hello.txt", "/foo.txt");
-    readFile(SPIFFS, "/foo.txt");
-    deleteFile(SPIFFS, "/foo.txt");
-    testFileIO(SPIFFS, "/test.txt");
-    deleteFile(SPIFFS, "/test.txt");
-    Serial.println( "Test complete" );
     */
+
+    Serial.println("-----\nsetup testing done!");
+    heater.initPWM();
+    heater.startPWM();
+    // heater.setPWM(0.1, (float)2);
+    // heater.startPWM();
+
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
+void loop(){
+    heater.setPWM(2,1);
+
+    float getCycle = heater.getCyclePeriod();
+    float getDuty = heater.getDutyPeriod();
+
+    float delta = getCycle/20; //0.1
+    float dutyS = getDuty + delta;
+
+    while(on){
+        //Telemetry test;
+        //sensor.snapshot(&test);
+
+        if(heater.pwmAction()){
+            Serial.println("Alarm!");
+            heater.setDuty(heater.getDutyPeriod()+delta);
+            if(heater.getDutyPeriod() >= heater.getCyclePeriod()) heater.setDuty(delta);
+        }
+    }
 }
