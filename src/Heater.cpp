@@ -8,10 +8,18 @@
 
 #include "Heater.h"
 
-//Callback function that raises associated trigger when timer reaches alarm
-bool IRAM_ATTR timer_isr_callback(void *args) {
-    bool *trigger = (bool *) args;
-    *trigger = true;
+bool IRAM_ATTR timer_isr_callback_cycle(void *args) {
+    bool *pwm_signal = (bool *) args;
+
+    gpio_set_level(PWM_OUTPUT_PIN, HIGH);
+    timer_start(TIMER_GROUP, TIMER_ID_ON);
+
+    return true; //unsure if something is missing here
+}
+
+bool IRAM_ATTR timer_isr_callback_duty(void *args) {
+    gpio_set_level(PWM_OUTPUT_PIN, LOW);
+    timer_pause(TIMER_GROUP, TIMER_ID_ON);
 
     return true; //unsure if something is missing here
 }
@@ -20,7 +28,7 @@ HeaterCore::HeaterCore(){
     //PWM output
     initGPIO();
     
-    //Fill Timer Config
+    //Fill Timer Config; todo: move to header
     tmr_config.alarm_en = TIMER_ALARM_EN;
     tmr_config.counter_en = TIMER_PAUSE;
     tmr_config.counter_dir = TIMER_COUNT_UP;
@@ -49,18 +57,22 @@ void HeaterCore::initGPIO(){
 }
 
 void HeaterCore::initPWM(){
-    //Initiate Timers
-    configureTimers(TIMER_GROUP, TIMER_ID_MAIN, cyclePeriod, &triggerCycle);
-    configureTimers(TIMER_GROUP, TIMER_ID_ON, dutyPeriod, &triggerDuty);
+    //Cycle timer
+    timer_init(TIMER_GROUP, TIMER_ID_MAIN, &tmr_config);
+    timer_set_counter_value(TIMER_GROUP, TIMER_ID_MAIN, 0);
+    timer_set_alarm_value(TIMER_GROUP, TIMER_ID_MAIN, (cyclePeriod)*TIMER_SCALE);
+    timer_enable_intr(TIMER_GROUP, TIMER_ID_MAIN);
+    timer_isr_callback_add(TIMER_GROUP, TIMER_ID_MAIN, timer_isr_callback_cycle, NULL, 0);
+
+    //Duty timer
+    timer_init(TIMER_GROUP, TIMER_ID_ON, &tmr_config);
+    timer_set_counter_value(TIMER_GROUP, TIMER_ID_ON, 0);
+    timer_set_alarm_value(TIMER_GROUP, TIMER_ID_ON, (dutyPeriod)*TIMER_SCALE);
+    timer_enable_intr(TIMER_GROUP, TIMER_ID_ON);
+    timer_isr_callback_add(TIMER_GROUP, TIMER_ID_ON, timer_isr_callback_duty, NULL, 0);
 }
 
 void HeaterCore::startPWM(){
-    //Making sure triggers are off
-    triggerCycle = false;
-    triggerDuty = false;
-
-    //turn on pwm output initially
-    gpio_set_level(PWM_OUTPUT_PIN, HIGH);
 
     //Start timers
     resumePWM();
@@ -81,42 +93,31 @@ void HeaterCore::resetPWM(){
 }
 
 void HeaterCore::pausePWM(){
+    //pause timers
     timer_pause(TIMER_GROUP, TIMER_ID_MAIN);
     timer_pause(TIMER_GROUP, TIMER_ID_ON);
     statusTimer = false;
+
+    //turn off pwm output
     gpio_set_level(PWM_OUTPUT_PIN, LOW);
 }
 
 void HeaterCore::resumePWM(){
-    timer_start(TIMER_GROUP, TIMER_ID_MAIN);
-    timer_start(TIMER_GROUP, TIMER_ID_ON);
+    //if 100% duty cycle, turn output on without using pwm timers\
+    fixes bug where 100% would cause output to toggle when pwm finished a cycle
+    if(dutyPeriod == cyclePeriod){
+        gpio_set_level(PWM_OUTPUT_PIN, HIGH);
+    }
+    else{
+        //start timers
+        timer_start(TIMER_GROUP, TIMER_ID_MAIN);
+        timer_start(TIMER_GROUP, TIMER_ID_ON);
+
+        //turn pwm output to high at beginning of cycle
+        gpio_set_level(PWM_OUTPUT_PIN, HIGH);
+    }
     statusTimer = true;
-    gpio_set_level(PWM_OUTPUT_PIN, HIGH);
 
-}
-
-bool HeaterCore::pwmAction(bool instantAction){
-    bool trigger = false;
-
-    //Period Timer
-    if(triggerCycle == true){
-        timer_start(TIMER_GROUP, TIMER_ID_ON); //start duty timer
-        triggerCycle = false; //reset trigger
-        gpio_set_level(PWM_OUTPUT_PIN, HIGH); //output high at beginning of cycle
-
-        trigger = true;
-    }
-
-    //Duty Timer
-    if(triggerDuty == true){
-        timer_pause(TIMER_GROUP, TIMER_ID_ON); //stop duty timer
-        triggerDuty = false; //reset trigger
-        gpio_set_level(PWM_OUTPUT_PIN, LOW); //output low at end of duty
-
-        if(instantAction) trigger = true;
-    }
-
-    return trigger;
 }
 
 void HeaterCore::setPWM(float cycle_period, float duty_period){
@@ -125,8 +126,12 @@ void HeaterCore::setPWM(float cycle_period, float duty_period){
     //temporarily pause PWM timers if running
     if(buffer == true){
         pausePWM();
-        statusTimer = false;
     }
+
+    //ensure new values are within range
+    if(cycle_period <= 0) cycle_period = getCyclePeriod();
+    if(duty_period > cycle_period) duty_period = cycle_period;
+    if(duty_period < 0) duty_period = 0;
 
     //set PWM cycle and duty periods
     cyclePeriod = cycle_period;
@@ -138,29 +143,21 @@ void HeaterCore::setPWM(float cycle_period, float duty_period){
     //unpause
     if(buffer == true){
         resumePWM();
-        statusTimer = true;
     }
 }
 
-void HeaterCore::setDuty(float duty_period){
-    bool buffer = statusTimer; //holds statusTimer=true while timer is paused
+void HeaterCore::setDutyPeriod(float duty_period){
+    setPWM(duty_period, getCyclePeriod());
+}
 
-    //temporarily pause PWM timers if running
-    if(buffer == true){
-        pausePWM();
-        statusTimer = false;
-    }
+void HeaterCore::setDutyCycle(int duty_cycle, float cycle_period){
+    float duty = cycle_period * ((float)duty_cycle / 100);
 
-    //set duty period
-    dutyPeriod = duty_period;
-    timer_set_alarm_value(TIMER_GROUP, TIMER_ID_ON, dutyPeriod*TIMER_SCALE);
+    setPWM(cycle_period, duty);
+}
 
-    //unpause
-    if(buffer == true){
-        resumePWM();
-        statusTimer = true;
-    }
-
+void HeaterCore::setDutyCycle(int duty_cycle){
+    setDutyCycle(duty_cycle, getCyclePeriod());
 }
 
 float HeaterCore::getCyclePeriod(){
@@ -169,13 +166,4 @@ float HeaterCore::getCyclePeriod(){
 
 float HeaterCore::getDutyPeriod(){
     return dutyPeriod;
-}
-
-void HeaterCore::configureTimers(timer_group_t timer_group, timer_idx_t timer_id, float alarm_value, bool *trigger){
-    timer_init(timer_group, timer_id, &tmr_config);
-    timer_set_counter_value(timer_group, timer_id, 0);
-    timer_set_alarm_value(timer_group, timer_id, (alarm_value)*TIMER_SCALE);
-    timer_enable_intr(timer_group, timer_id);
-    timer_isr_callback_add(timer_group, timer_id, timer_isr_callback, trigger, 0);
-    // timer_start(timer_group, timer_id);
 }
