@@ -218,22 +218,17 @@ void setup(){
 }
 
 void loop(){
-    heater.setPWM(2,1);
-
-    float getCycle = heater.getCyclePeriod();
-    float getDuty = heater.getDutyPeriod();
-
-    float delta = getCycle/20; //0.1
-    float dutyS = getDuty + delta;
+    heater.setDutyCycle(110, 1);
+    int cycle = 0;
 
     while(on){
-        //Telemetry test;
-        //sensor.snapshot(&test);
+        // Telemetry test;
+        // sensor.snapshot(&test);
+        delay(5000);
 
-        if(heater.pwmAction()){
-            Serial.println("Alarm!");
-            heater.setDuty(heater.getDutyPeriod()+delta);
-            if(heater.getDutyPeriod() >= heater.getCyclePeriod()) heater.setDuty(delta);
-        }
+        heater.setDutyCycle(cycle);
+
+        cycle+=10;
+        if(cycle > 100) cycle = 0;
     }
 }

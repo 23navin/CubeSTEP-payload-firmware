@@ -47,19 +47,19 @@ public:
     
     /**
      * @brief Configure GPIO pin for PWM output
-     * @note use startPWM after calling this to begin counting
+     * @note This function is called in the HeaterCore constructor.
      */
     void initGPIO();
 
     /**
-     * @brief Configure timers for PWM functionality
-     * @note PWM uses both timers in group 0
+     * @brief Configure timers to create a PWM signal
+     * @note call startPWM after to start output
      */
     void initPWM();
     
     /**
      * @brief Start PWM output
-     *
+     * @note initPWM must be called before calling this function
      */
     void startPWM();
 
@@ -80,16 +80,6 @@ public:
      * 
      */
     void resumePWM();
-    
-    /**
-     * @brief Updates PWM output when called
-     * @note Call as frequently as possible for best accuracy
-     * 
-     * @param instantAction If true, function considers completion of duty and cycle as an action. If false (default), function only considers completion of cycle as an action.
-     * @return true if an action has occured since last called 
-     * @return false if an action has not occured since last called
-     */
-    bool pwmAction(bool instantAction = false);
 
     /**
      * @brief Change the PWM cycle and duty periods
@@ -106,7 +96,12 @@ public:
      * 
      * @param duty_period Length of the PWM duty (seconds)
      */
-    void setDuty(float duty_period);
+    void setDutyPeriod(float duty_period);
+
+    void setDutyCycle(int duty_cycle, float period);
+
+    void setDutyCycle(int duty_cycle);
+
 
     /**
      * @brief Get the Cycle Period object
@@ -144,33 +139,11 @@ private:
     timer_config_t tmr_config;
 
     /**
-     * @brief Trigger value for the PWM's Cycle Period
-     * @note When true, indicates that PWM period has been reached and PWM output should be turned on
-     */
-    bool triggerCycle;
-
-    /**
-     * @brief Trigger value for the PWM's Duty Period
-     * @note When true, indicates that Duty period has been reahed and PWM output should be turned off
-     */
-    bool triggerDuty;
-
-    /**
      * @brief Keeps track of whether the PWM timers are running or not
      * 
      */
     bool statusTimer = false;
 
-    /**
-     * @brief Configure timers
-     * @note Call before starting PWM output
-     * 
-     * @param timer_group Timer group [default is TIMER_GROUP_0]
-     * @param timer_id Timer index, either TIMER_0 (PWM cycle timer) or TIMER_1 (PWM duty timer)
-     * @param alarm_value A 64-bit value to set the alarm value
-     * @param trigger Address to a boolean that will be set to true when the timer reaches its alarm
-     */
-    void configureTimers(timer_group_t timer_group, timer_idx_t timer_id, float alarm_value, bool *trigger);
 };
 
 #endif // _heater_H_included
