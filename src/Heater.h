@@ -98,15 +98,25 @@ public:
      */
     void setDutyPeriod(float duty_period);
 
+    /**
+     * @brief Set the PWM length and duty cycle
+     * 
+     * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
+     * @param period Length of the PWM duty (seconds)
+     */
     void setDutyCycle(int duty_cycle, float period);
 
+    /**
+     * @brief Set the Duty Cycle
+     * 
+     * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
+     */
     void setDutyCycle(int duty_cycle);
-
 
     /**
      * @brief Get the Cycle Period object
      * 
-     * @return float 
+     * @return float
      */
     float getCyclePeriod();
 

@@ -17,30 +17,13 @@ using namespace std;
 #include "Heater.h"
 #include "I2C.h"
 
-#define on 1 // True
-#define off 0 // False
 #define one_second (1000) //one thousand milli-seconds
 
 //Logging
 #define TAGI "payload_INFO"
 
-// I2C bus -> move into i2c.h
-#define SDA 1               // SDA pin
-#define SCL 2               // SCL pin
-#define SLAVE_ADDRESS 0x04  // device address
-#define ANSWER_SIZE 5       // length of message that is sent over I2C
-
 //UART
 #define UART_BAUD_RATE 115200 //default baud rate
-
-// FSM setup
-enum class modes {
-    Safety,
-    LowPower,
-    Idle,
-    Experiment,
-    Communicate
-};
 
 /**
  * @brief Sets a time object to the system time when this build was compiled
@@ -90,7 +73,6 @@ void addLine(FileCore *file_p, Telemetry *tele){
     char line[line_size];
     tele->ToCSV(line);
     file_p->appendFile("/log.csv", line);
-    
 }
 
 /**
@@ -104,32 +86,19 @@ void initSPI(FileCore *file_p){
     //createLog();
 }
 
-// void teleTester(Telemetry *tele, FileCore *file_p){
-//     tele->random();
-//     char header[1000];
-//     char tempout[type_size_temp];
-//     char wattout[type_size_watt];
-//     char secondOut[cell_size_epoch];
-//     char msecondOut[cell_size_mSecond];
-//     char timeOut[type_size_time];
-//     char Out[line_size];
+void PWMtest(HeaterCore *heater_p) {
+    int cycle = 0;
+    while(1){
+        // Telemetry test;
+        // sensor.snapshot(&test);
+        delay(5000);
 
-//     tele->TempToCSV(tempout);
-//     tele->WattToCSV(wattout);
-//     tele->TimeToCSV(secondOut, msecondOut);
-//     tele->TimeToCSV(timeOut);
-//     tele->headerCSV(header);
-//     tele->ToCSV(Out);
+        heater_p->setDutyCycle(cycle);
 
-    
-//     Serial.println(tempout);
-//     Serial.println(wattout);
-//     Serial.println(secondOut);
-//     Serial.println(msecondOut);
-//     Serial.println(timeOut);
-//     Serial.println(header);
-//     Serial.println(Out);
-// }
+        cycle+=10;
+        if(cycle > 100) cycle = 0;
+    }
+}
 
 void fileTester(FileCore *file_p){
     vector<String> recovered;
@@ -144,12 +113,6 @@ void fileTester(FileCore *file_p){
     }
 }
 
-void internalSystemCheck();
-
-void checkI2C();
-
-void checkTime();
-
 ESP32Time rtc;
 FileCore storage;
 SensorCore sensor;
@@ -157,6 +120,7 @@ HeaterCore heater;
 I2cCore slave;
 
 void setup(){
+
     //set internal rtc clock
     setTimeToCompile(&rtc);
     sensor.init(&rtc);
@@ -164,24 +128,14 @@ void setup(){
     // Serial setup
     Serial.begin(UART_BAUD_RATE);
     delay(1000);
-    char jog[64];
-    sprintf(jog, "Communication started over UART @ %i", UART_BAUD_RATE);
-    Serial.println("Communication started");
-
-    
-    //Timestamp
-    char timestamp[64];
-    sprintf(timestamp, "System time is %i/%i\n", rtc.getEpoch(), rtc.getMillis());
-    Serial.println(timestamp);
-    
-    // Telemetry testing
-    // Serial.println("telemetry tests below");
-
-    // Telemetry active, capture;
+    Serial.printf("Communication started over UART @ %i\n", UART_BAUD_RATE);
+    Serial.printf("System time is %i/%i\n\n", rtc.getEpoch(), rtc.getMillis());
 
     // //File testing
+    // Telemetry active, capture;
     // Serial.println("file tests below");
     // storage.listDir("/", 0);
+    // deleteLog(&storage);
     // createLog(&storage, &active);
     // storage.listDir("/", 0);
 
@@ -193,42 +147,48 @@ void setup(){
 
     // fileTester(&storage);
 
-    // storage.listDir("/", 0);
-    // deleteLog(&storage);
-    // storage.listDir("/", 0);
-
-
-    // I2C slave setup
-    /*
-    Wire.begin(SDA, SCL, SLAVE_ADDRESS);
-    Wire.onReceive(ReceiveI2C);
-    Wire.onRequest(WritetoI2C);
-    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-    Serial.println("SPIFFS Mount Failed");
-    return;
-    }
-    */
-
     Serial.println("-----\nsetup testing done!");
     heater.initPWM();
     heater.startPWM();
-    // heater.setPWM(0.1, (float)2);
-    // heater.startPWM();
+    heater.setDutyCycle(40, 1);
 
+    //i2c setup
+    slave.init();
+    Serial.printf("Slave joined I2C bus with addr #%02X\n-----\n", slave.getAddress());
 }
 
 void loop(){
-    heater.setDutyCycle(110, 1);
-    int cycle = 0;
+    if(slave.check_for_message()) {
+        uint8_t opcode = slave.get_opcode();
 
-    while(on){
-        // Telemetry test;
-        // sensor.snapshot(&test);
-        delay(5000);
+        if(opcode == 0x32) { //Get Time
+            uint8_t parameter = slave.get_parameter();
+            if(parameter == 0xEE) { //Epoch
+                uint32_t buffer;
+                buffer = rtc.getEpoch();
 
-        heater.setDutyCycle(cycle);
+                slave.write_four_bytes(buffer);
+            }
+            else if (parameter == 0x4D) { //ms
+            }
+            else { //Invalid Parameter
 
-        cycle+=10;
-        if(cycle > 100) cycle = 0;
+            }
+        }
+        Serial.println("End Message\n");
+    }
+}
+
+void get_temperature(uint8_t parameter){
+    if(parameter == 0xEE) { //Epoch
+        uint32_t buffer;
+        buffer = rtc.getEpoch();
+        slave.write_four_bytes(buffer);
+        }
+
+    else if (parameter == 0x4D) { //ms
+    }
+    else { //Invalid Parameter
+
     }
 }
