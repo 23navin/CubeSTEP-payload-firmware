@@ -41,7 +41,7 @@ void Telemetry::ToCSV(char *LineChar){
     WattToCSV(WattBuffer);
     strncat(Line, WattBuffer, type_size_watt);
 
-    strncat(Line,"\n",2); // end line
+    strncat(Line,"",2); // end line
     //output
     strcpy(LineChar, Line);
 }
@@ -205,7 +205,7 @@ void Telemetry::headerCSV(char *LineChar){
         strcat(LineBuffer, buffer);
     }
 
-    strncat(LineBuffer,"\n",2); // end line
+    strncat(LineBuffer,"",2); // end line
     //out
     strcpy(LineChar, LineBuffer);
 }

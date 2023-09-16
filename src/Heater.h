@@ -127,6 +127,14 @@ public:
      */
     float getDutyPeriod();
 
+    inline int getDutyCycle(){
+        return (int)((dutyPeriod/cyclePeriod)*100);
+    }
+
+    inline bool getStatus(){
+        return statusTimer;
+    }
+
 private:
     /**
      * @brief Length of the PWM cyle in seconds

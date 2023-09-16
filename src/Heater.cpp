@@ -79,6 +79,7 @@ void HeaterCore::startPWM(){
 }
 
 void HeaterCore::resetPWM(){
+    log_d("PWM output reset");
     //pause timers
     if(statusTimer == true){
         pausePWM();
@@ -97,9 +98,11 @@ void HeaterCore::pausePWM(){
     timer_pause(TIMER_GROUP, TIMER_ID_MAIN);
     timer_pause(TIMER_GROUP, TIMER_ID_ON);
     statusTimer = false;
+    log_i("PWM output: off");
 
     //turn off pwm output
     gpio_set_level(PWM_OUTPUT_PIN, LOW);
+
 }
 
 void HeaterCore::resumePWM(){
@@ -117,7 +120,7 @@ void HeaterCore::resumePWM(){
         gpio_set_level(PWM_OUTPUT_PIN, HIGH);
     }
     statusTimer = true;
-
+    log_i("PWM output: on");
 }
 
 void HeaterCore::setPWM(float cycle_period, float duty_period){
@@ -136,6 +139,9 @@ void HeaterCore::setPWM(float cycle_period, float duty_period){
     //set PWM cycle and duty periods
     cyclePeriod = cycle_period;
     dutyPeriod = duty_period;
+    log_i("PWM timers changed");
+    log_d("PWM Cycle Period set to %.2f seconds", cycle_period);
+    log_d("PWM Duty Period set to %.2f seconds", duty_period);
 
     timer_set_alarm_value(TIMER_GROUP, TIMER_ID_MAIN, cyclePeriod*TIMER_SCALE);
     timer_set_alarm_value(TIMER_GROUP, TIMER_ID_ON, dutyPeriod*TIMER_SCALE);
@@ -154,10 +160,12 @@ void HeaterCore::setDutyCycle(int duty_cycle, float cycle_period){
     float duty = cycle_period * ((float)duty_cycle / 100);
 
     setPWM(cycle_period, duty);
+
 }
 
 void HeaterCore::setDutyCycle(int duty_cycle){
     setDutyCycle(duty_cycle, getCyclePeriod());
+    log_i("PWM Duty Cycle set to %i", duty_cycle);
 }
 
 float HeaterCore::getCyclePeriod(){

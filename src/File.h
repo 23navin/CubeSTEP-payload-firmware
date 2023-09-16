@@ -93,8 +93,9 @@ public:
      * @brief benchmark to measure read and write time for a 1MB file
      * 
      * @param path location of benchmark file
+     * @return time in milliseconds
      */
-    void testFileIO(const char * path);
+    uint32_t testFileIO(const char * path);
 };
 
 #endif // _file_H_INCLUDED

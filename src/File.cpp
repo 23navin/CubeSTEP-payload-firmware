@@ -16,55 +16,51 @@ FileCore::~FileCore(){
 
 void FileCore::mount(){
     if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-        Serial.println("SPIFFS Mount Failed");
+        log_e("SPIFFS Mount Failed");
         return;
     }
 
-    Serial.println("SPIFFS Mount Successfull");
+    log_i("SPIFFS Mount Successfull");
     return;
 }
 
 void FileCore::listDir(const char * dirname, uint8_t levels){
-        Serial.printf("Listing directory: %s\r\n", dirname);
+    log_d("Listing directory: %s\r", dirname);
 
-        File root = SPIFFS.open(dirname);
-        if(!root){
-            Serial.println("- failed to open directory");
-            return;
-        }
-        if(!root.isDirectory()){
-            Serial.println(" - not a directory");
-            return;
-        }
-
-        File file = root.openNextFile();
-        while(file){
-            if(file.isDirectory()){
-                Serial.print("  DIR : ");
-                Serial.println(file.name());
-                if(levels){
-                    listDir(file.path(), levels -1);
-                }
-            }else{
-                Serial.print("  FILE: ");
-                Serial.print(file.name());
-                Serial.print("\tSIZE: ");
-                Serial.println(file.size());
-            }
-            file = root.openNextFile();
-        }
+    File root = SPIFFS.open(dirname);
+    if(!root){
+        log_w("%s - failed to open directory", dirname);
+        return;
     }
-
-void FileCore::readFile(const char * path){
-    Serial.printf("Reading file: %s\r\n", path);
-
-    File file = SPIFFS.open(path);
-    if(!file || file.isDirectory()){
-        Serial.println("- failed to open file for reading");
+    if(!root.isDirectory()){
+        log_w("%s - not a directory", dirname);
         return;
     }
 
-    Serial.println("- read from file:");
+    File file = root.openNextFile();
+    while(file){
+        if(file.isDirectory()){
+            log_d("  DIR : %s", file.name());
+            if(levels){
+                listDir(file.path(), levels -1);
+            }
+        }else{
+            log_d("  FILE : %s\t SIZE: %i", file.name(), file.size());
+        }
+        file = root.openNextFile();
+    }
+}
+
+void FileCore::readFile(const char * path){
+    log_d("Reading file: %s\r", path);
+
+    File file = SPIFFS.open(path);
+    if(!file || file.isDirectory()){
+        log_w("%s - failed to open file for reading", path);
+        return;
+    }
+
+    log_d("- read from file: ");
     while(file.available()){
         Serial.write(file.read());
     }
@@ -72,11 +68,11 @@ void FileCore::readFile(const char * path){
 }
 
 std::vector<String> FileCore::loadFile(const char *path){
-    Serial.printf("Reading file: %s\r\n", path);
+    log_d("Reading file: %s\r", path);
 
     File file = SPIFFS.open(path);
     if(!file || file.isDirectory()){
-        Serial.println("- failed to open file for reading");
+        log_w("%s - failed to open file for reading", path);
         //return;
     }
 
@@ -93,7 +89,7 @@ std::vector<String> FileCore::loadFile(const char *path){
 }
 
 void FileCore::writeFile(const char * path, const char * message){
-    Serial.printf("Writing file: %s\r\n", path);
+    log_d("Writing file: %s\r", path);
 
     File file = SPIFFS.open(path, FILE_WRITE);
     if(!file){
@@ -101,97 +97,95 @@ void FileCore::writeFile(const char * path, const char * message){
         return;
     }
     if(file.print(message)){
-        Serial.println("- file written");
+        log_d("- file written");
     } else {
-        Serial.println("- write failed");
+        log_w("- write failed");
     }
     file.close();
 }
 
 void FileCore::appendFile(const char * path, const char * message){
-    Serial.printf("Appending to file: %s\r\n", path);
+    log_d("Appending to file: %s\r", path);
 
     File file = SPIFFS.open(path, FILE_APPEND);
     if(!file){
-        Serial.println("- failed to open file for appending");
+        log_w("%s - failed to open file for appending", path);
         return;
     }
     if(file.print(message)){
-        Serial.println("- message appended");
+        log_d("- message appended");
     } else {
-        Serial.println("- append failed");
+        log_w("- append failed");
     }
     file.close();
 }
 
 void FileCore::renameFile(const char * path1, const char * path2){
-    Serial.printf("Renaming file %s to %s\r\n", path1, path2);
+    log_d("Renaming file %s to %s\r", path1, path2);
     if (SPIFFS.rename(path1, path2)){
-        Serial.println("- file renamed");
+        log_d("- file %s renamed to %s", path1, path2);
     } else {
-        Serial.println("- rename failed");
+        log_w("- %s rename failed", path1);
     }
 }
 
 void FileCore::deleteFile(const char * path){
-    Serial.printf("Deleting file: %s\r\n", path);
+    log_d("Deleting file: %s\r", path);
     if(SPIFFS.remove(path)){
-        Serial.println("- file deleted");
+        log_d("- file %s deleted", path);
     } else {
-        Serial.println("- delete failed");
+        log_w("- %s delete failed", path);
     }
 }
 
-void FileCore::testFileIO(const char * path){
-    Serial.printf("Testing file I/O with %s\r\n", path);
-
+uint32_t FileCore::testFileIO(const char * path){
+    log_d("Starting File test");
     static uint8_t buf[512];
     size_t len = 0;
     File file = SPIFFS.open(path, FILE_WRITE);
     if(!file){
-        Serial.println("- failed to open file for writing");
-        return;
+        return -1;
     }
 
     size_t i;
-    Serial.print("- writing" );
+    log_d("- writing" );
     uint32_t start = millis();
+    uint32_t end;
     for(i=0; i<2048; i++){
-        if ((i & 0x001F) == 0x001F){
-        Serial.print(".");
-        }
+        // if ((i & 0x001F) == 0x001F){
+        // Serial.print(".");
+        // }
         file.write(buf, 512);
     }
-    Serial.println("");
-    uint32_t end = millis() - start;
-    Serial.printf(" - %u bytes written in %u ms\r\n", 2048 * 512, end);
+    // Serial.println("");
     file.close();
 
     file = SPIFFS.open(path);
-    start = millis();
-    end = start;
     i = 0;
     if(file && !file.isDirectory()){
         len = file.size();
         size_t flen = len;
-        start = millis();
-        Serial.print("- reading" );
+        log_d("- reading" );
         while(len){
             size_t toRead = len;
             if(toRead > 512){
                 toRead = 512;
             }
             file.read(buf, toRead);
-            if ((i++ & 0x001F) == 0x001F){
-            Serial.print(".");
-            }
+            // if ((i++ & 0x001F) == 0x001F){
+            // Serial.print(".");
+            // }
             len -= toRead;
         }
-        Serial.println("");
+        // Serial.println("");
         end = millis() - start;
-        Serial.printf("- %u bytes read in %u ms\r\n", flen, end);
         file.close();
+
+        SPIFFS.remove(path);
+        return end;
     } else {
-        Serial.println("- failed to open file for reading");
+        return -1;     
     }
+
+    return -1;
 }
