@@ -175,3 +175,13 @@ float HeaterCore::getCyclePeriod(){
 float HeaterCore::getDutyPeriod(){
     return dutyPeriod;
 }
+
+void HeaterCore::snapshot(Telemetry *telemetry_out){
+    //Current pwm -> telemetry object
+    if(statusTimer) {
+        telemetry_out->setPWM(getDutyCycle(), cyclePeriod);
+    }
+    else {
+        telemetry_out->setPWM(0, cyclePeriod);
+    }
+}

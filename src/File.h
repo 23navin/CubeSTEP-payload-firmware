@@ -58,6 +58,12 @@ public:
 
     std::vector<String> loadFile(const char *path);
 
+    int read_file(std::string *string_out);
+
+    void select_file(const char *path);
+
+    void deselect_file();
+
     /**
      * @brief creates a file
      * 
@@ -96,6 +102,10 @@ public:
      * @return time in milliseconds
      */
     uint32_t testFileIO(const char * path);
+
+private:
+    File open_file;
+    uint8_t line;
 };
 
 #endif // _file_H_INCLUDED

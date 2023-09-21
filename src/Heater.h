@@ -13,6 +13,8 @@
 #include "driver/gpio.h"
 #include "ESP32Time.h"
 
+#include "Telemetry.h"
+
 // TIMER
 #define TIMER_DIVIDER           65536
 #define TIMER_SCALE             (TIMER_BASE_CLK / TIMER_DIVIDER)  // one second
@@ -134,6 +136,9 @@ public:
     inline bool getStatus(){
         return statusTimer;
     }
+
+    void snapshot(Telemetry *telemetry_out);
+
 
 private:
     /**

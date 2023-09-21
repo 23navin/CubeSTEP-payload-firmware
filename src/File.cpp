@@ -88,6 +88,34 @@ std::vector<String> FileCore::loadFile(const char *path){
     return lines;
 }
 
+void FileCore::select_file(const char *path){
+    log_i("Opening File for reading");
+    open_file = SPIFFS.open(path);
+    if(!open_file || open_file.isDirectory()){
+        log_w("%s - failed to open file for reading", path);
+    }
+    line = 0;
+}
+
+void FileCore::deselect_file(){
+    log_i("Closing file");
+    open_file.close();
+}
+
+int FileCore::read_file(std::string *string_out){
+    if(open_file.available()) {
+        log_d("Reading Line %i", line);
+        String buffer;
+        buffer = open_file.readStringUntil('\n');
+        *string_out = std::string(buffer.c_str());
+        line++;
+
+        return line;
+    }
+
+    return -1;
+}
+
 void FileCore::writeFile(const char * path, const char * message){
     log_d("Writing file: %s\r", path);
 

@@ -76,39 +76,17 @@ void addLine(FileCore *file_p, Telemetry *tele){
 }
 
 /**
- * @brief Initializes file system
- * @note for testing
+ * @brief Saves system snapshot to Telemetry object and saves it to log
  * 
  * @param file_p 
+ * @param sens_p 
+ * @param pwm_p 
  */
-void initSPI(FileCore *file_p){
-    file_p->mount();
-    //createLog();
-}
-
-void PWMtest(HeaterCore *heater_p) {
-    int cycle = 0;
-    while(1){
-        // Telemetry test;
-        // sensor.snapshot(&test);
-        delay(5000);
-
-        heater_p->setDutyCycle(cycle);
-
-        cycle+=10;
-        if(cycle > 100) cycle = 0;
-    }
-}
-
-void fileTester(FileCore *file_p){
-    vector<String> recovered;
-    recovered = file_p->loadFile("/log.csv");
-    
-    Serial.println(recovered.size());
-    for(int i=0; i < recovered.size(); i++) {
-        Serial.printf("Line #%i\n", i);
-        Serial.println(recovered[i]);
-    }
+void capture_telemetry_to_log(FileCore *file_p, SensorCore *sens_p, HeaterCore *pwm_p){
+    Telemetry capture;
+    sens_p->snapshot(&capture);
+    pwm_p->snapshot(&capture);
+    addLine(file_p, &capture);
 }
 
 ESP32Time rtc;
@@ -119,7 +97,13 @@ I2cCore slave;
 
 //I2C call functions
 
-void i2c_handler_unused(){
+/**
+ * @brief Function called when an undefined opcode is
+ * received.
+ * 
+ * @param parameter unused
+ */
+void i2c_handler_unused(uint32_t parameter){
     log_w("Invalid Opcode");
 }
 
@@ -129,8 +113,10 @@ void i2c_handler_unused(){
  * called, execution of the program stops, both CPUs are 
  * reset, the application is loaded by the bootloader and 
  * starts execution again. 
+ * 
+ * @param parameter unused
  */
-void i2c_handler_restart_device(uint8_t parameter){
+void i2c_handler_restart_device(uint32_t parameter){
     if(parameter == 0x49) {
         log_i("Restarting I2C");
         slave.reset();
@@ -149,7 +135,7 @@ void i2c_handler_restart_device(uint8_t parameter){
 }
 
 //declare 0x03 handler so that it can be used by 0x02
-void i2c_handler_wake_device();
+void i2c_handler_wake_device(uint32_t parameter);
 
 /**
  * @brief OpCode 0x02
@@ -159,8 +145,10 @@ void i2c_handler_wake_device();
  * reduced. Upon exit from Light-sleep, the digital 
  * peripherals, RAM, and CPUs resume operation and their 
  * internal states are preserved.
+ * 
+ * @param parameter unused
  */
-void i2c_handler_sleep_device(){
+void i2c_handler_sleep_device(uint32_t parameter){
     //set up sleep mode
     gpio_wakeup_enable(I2C_SCL_PIN, GPIO_INTR_LOW_LEVEL);
     esp_sleep_enable_gpio_wakeup();
@@ -177,7 +165,7 @@ void i2c_handler_sleep_device(){
     //device will wake when the i2c bus is used. OpCode\
     0x03 (Wake Device)'s should be used to wake the device\
     so it's i2c handler is run immediately upon waking.
-    i2c_handler_wake_device();
+    i2c_handler_wake_device(INVALID);
 }
 
 /**
@@ -185,8 +173,9 @@ void i2c_handler_sleep_device(){
  * @note Device will wake up from sleep mode when the
  * SCL pin is brought to low. 
  * 
+ * @param parameter unused
  */
-void i2c_handler_wake_device(){
+void i2c_handler_wake_device(uint32_t parameter){
     log_i("waking up...");
     slave.write_one_byte(DEVICE_ADDR);
 
@@ -196,15 +185,70 @@ void i2c_handler_wake_device(){
 
 /**
  * @brief OpCode 0x04
+ * @note 
+ * 
+ * @param parameter unused
  */
-void i2c_handler_run_system_check(){
+void i2c_handler_run_system_check(uint32_t parameter){
 
     log_i("End Message");
 }
 
-void i2c_handler_get_system_check_result(uint8_t parameter){
+/**
+ * @brief Opcode 0x25
+ * @note Device will run a brief system check on the
+ * specified system and return a metric related to
+ * its performance.
+ * 
+ * @param 0x54 PWM Signal Generator
+ * @param 0x49 I2C Slave
+ * @param 0x7C SPI Flash
+ * @param 0x25 ADC Temperature Sensors
+ */
+void i2c_handler_get_system_check_result(uint32_t parameter){
 
     log_i("End Message");
+}
+
+/**
+ * @brief OpCode 0x0F
+ * @note Prepares experiment log file to be read by the
+ * I2C system. This function must be called before get_log
+ * 
+ * @param parameter unused
+ */
+void i2c_handler_prepare_log(uint32_t parameter){
+    // log_buffer = storage.loadFile("/log.csv");
+    // slave.write_one_byte(log_buffer.size());
+
+    storage.select_file("/log.csv");
+    slave.write_one_byte(0x0F);
+}
+
+/**
+ * @brief OpCode 0x11
+ * @note Returns an individual line from the experiment
+ * log file. This function must be called after prepare_log.
+ * The first call will return the first line, the second
+ * call will return the second line, etc... If there is no
+ * line to send, it will return INVALID and close the file.
+ * 
+ * @param parameter unused
+ */
+void i2c_handler_get_log(uint32_t parameter){
+    string buffer;
+    int line;
+
+    line = storage.read_file(&buffer);
+    if(line != -1) {
+        slave.write_string(buffer);
+    }
+    else {
+        storage.deselect_file();
+        
+        slave.write_one_byte(INVALID);
+    }
+    
 }
 
 /**
@@ -215,7 +259,7 @@ void i2c_handler_get_system_check_result(uint8_t parameter){
  * @param 0xEE Returns Epoch
  * @param 0x4D Returns MilliSecond
  */
-void i2c_handler_get_time(uint8_t parameter){
+void i2c_handler_get_time(uint32_t parameter){
     if(parameter == 0xEE) { //Epoch
         slave.write_four_bytes(rtc.getEpoch());
         }
@@ -232,12 +276,13 @@ void i2c_handler_get_time(uint8_t parameter){
 
 /**
  * @brief OpCode 0x93
+ * @note Sets the current time of the device
  * 
  * @param parameter Epoch
  */
-void i2c_handler_set_time(uint64_t parameter){
+void i2c_handler_set_time(uint32_t parameter){
     log_i("System time sync");
-    log_d("System time set to %X", parameter);
+    log_d("System time set to %x", parameter);
     rtc.setTime(parameter);
 
     slave.write_four_bytes(parameter);
@@ -245,11 +290,16 @@ void i2c_handler_set_time(uint64_t parameter){
 }
 
 /**
- * @brief 
+ * @brief Opcode 0x34
+ * @note Returns the temperature of a provided
+ * Sensor
  * 
- * @param parameter 
+ * @param 0x00 Sensor 0
+ * @param 0x01 Sensor 1
+ * @param ....
+ * @param 0x0F Sensor 15 
  */
-void i2c_handler_get_temperature(uint8_t parameter){
+void i2c_handler_get_temperature(uint32_t parameter){
     if(parameter >= number_of_temp_sensors) {
         slave.write_one_byte(INVALID);
         log_d("%i vs %i", parameter, number_of_temp_sensors);
@@ -268,7 +318,13 @@ void i2c_handler_get_temperature(uint8_t parameter){
     log_i("End Message");
 }
 
-void i2c_handler_get_pwm_duty(){
+/**
+ * @brief OpCode 0x15
+ * @note Returns the current PWM Duty value
+ * 
+ * @param parameter 
+ */
+void i2c_handler_get_pwm_duty(uint32_t parameter){
     slave.write_one_byte(heater.getDutyCycle());
     log_i("End Message");
 }
@@ -285,211 +341,61 @@ void setup(){
     log_i("Communication started over UART @ %i", UART_BAUD_RATE);
     log_d("System time is %i/%i\n", rtc.getEpoch(), rtc.getMillis());
 
-    // SPI Flash testing
-    // Telemetry active, capture;
-    // Serial.println("file tests below");
-    // storage.listDir("/", 0);
-    // deleteLog(&storage);
-    // createLog(&storage, &active);
-    // storage.listDir("/", 0);
+    // i2c setup
+    slave.init();
 
-    // sensor.snapshot(&capture);
-    // addLine(&storage, &capture);
-
-    // active.random(&rtc);
-    // addLine(&storage, &active);
-
-    // log_i("SPI Flash tested at %i ms",storage.testFileIO("/test.txt"));
-    // log_i("ADC test result: %f", sensor.test());
-
-    fileTester(&storage);
+    // PWM setup
     heater.initPWM();
     heater.startPWM();
     heater.setDutyCycle(40, 1);
 
-    //i2c setup
-    slave.init();
+    // SPI Flash testing
+    Telemetry active, capture;
+    storage.listDir("/", 0);
+    deleteLog(&storage);
+    createLog(&storage, &active);
+    storage.listDir("/", 0);
 
+    capture_telemetry_to_log(&storage, &sensor, &heater);
+
+    heater.pausePWM();
+    capture_telemetry_to_log(&storage, &sensor, &heater);
+
+    heater.resumePWM();
+    heater.setDutyCycle(90, 4);
+    capture_telemetry_to_log(&storage, &sensor, &heater);
+
+    // log_i("SPI Flash tested at %i ms",storage.testFileIO("/test.txt"));
+    // log_i("ADC test result: %f", sensor.test());
+
+    //new file
+    int line_count;
+    storage.select_file("/log.csv");
+
+    do{
+        string read_buffer;
+
+        line_count = storage.read_file(&read_buffer);
+        Serial.println(read_buffer.c_str());
+    } while(line_count != -1);
+
+    storage.deselect_file();
+
+    //define i2c handler call functions
+    slave.install_i2c_handler_unused(i2c_handler_unused);
+    slave.install_i2c_handler(0x21, i2c_handler_restart_device);
+    slave.install_i2c_handler(0x02, i2c_handler_sleep_device);
+    slave.install_i2c_handler(0x0F, i2c_handler_prepare_log);
+    slave.install_i2c_handler(0x11, i2c_handler_get_log);
+    slave.install_i2c_handler(0x32, i2c_handler_get_time);
+    slave.install_i2c_handler(0x93, i2c_handler_set_time);
+    slave.install_i2c_handler(0x34, i2c_handler_get_temperature);
+    slave.install_i2c_handler(0x15, i2c_handler_get_pwm_duty);
+    
+    heater.setDutyCycle(50, 0.5);
     log_i("Setup completed.");
 }
 
 void loop(){
-    if(slave.check_for_message()) {
-        uint8_t opcode = slave.get_opcode();
-        uint32_t parameter = slave.get_parameter();
-
-        //00 - 
-        if(opcode == 0x00) /*i2c_handler*/;
-
-        //01 - Restart Device
-        if(opcode == 0x21) i2c_handler_restart_device(parameter);
-
-        //02 - Sleep Device
-        if(opcode == 0x02) i2c_handler_sleep_device();
-
-        //03 - Wake Device (handler is included in <2 - Sleep Device> and called \
-              automatically upon wakeup from sleep)
-
-        //04 - 
-        if(opcode == 0x04) /*i2c_handler*/;
-
-        //05 - 
-        if(opcode == 0x05) /*i2c_handler*/;
-
-        //06 - 
-        if(opcode == 0x06) /*i2c_handler*/;
-
-        //07 - 
-        if(opcode == 0x07) /*i2c_handler*/;
-
-        //08 - 
-        if(opcode == 0x08) /*i2c_handler*/;
-
-        //09 - 
-        if(opcode == 0x09) /*i2c_handler*/;
-
-        //0A - 
-        if(opcode == 0x0A) /*i2c_handler*/;
-
-        //0B - 
-        if(opcode == 0x0B) /*i2c_handler*/;
-
-        //0C - 
-        if(opcode == 0x0C) /*i2c_handler*/;
-
-        //0D - 
-        if(opcode == 0x0D) /*i2c_handler*/;
-
-        //0E - 
-        if(opcode == 0x0E) /*i2c_handler*/;
-
-        //0F - Get Experiment Log Length
-        if(opcode == 0x0F) /*i2c_handler*/;
-
-        //10 - 
-        if(opcode == 0x10) /*i2c_handler*/;
-
-        //11 - 
-        if(opcode == 0x11) /*i2c_handler*/;
-
-        //12 - 
-        if(opcode == 0x12) /*i2c_handler*/;
-
-        //12 - Get Time
-        if(opcode == 0x32) i2c_handler_get_time(parameter);
-        
-        //13 - Set Time
-        if(opcode == 0x93) i2c_handler_set_time(parameter);
-
-        //14 - Get Temperature
-        if(opcode == 0x34) i2c_handler_get_temperature(parameter);
-
-        //15 - Get PWM Duty
-        if(opcode == 0x15) i2c_handler_get_pwm_duty();
-
-        //16 - 
-        if(opcode == 0x16) /*i2c_handler*/;
-
-        //17 - 
-        if(opcode == 0x17) /*i2c_handler*/;
-
-        //18 - 
-        if(opcode == 0x18) /*i2c_handler*/;
-
-        //19 - 
-        if(opcode == 0x19) /*i2c_handler*/;
-
-        //1A - 
-        if(opcode == 0x1A) /*i2c_handler*/;
-
-	    //1B - 
-        if(opcode == 0x1B) /*i2c_handler*/;
-
-        //1C - 
-        if(opcode == 0x1C) /*i2c_handler*/;
-
-        //1D - 
-        if(opcode == 0x1D) /*i2c_handler*/;
-
-        //1E - 
-        if(opcode == 0x1E) /*i2c_handler*/;
-
-        //1F - 
-        if(opcode == 0x1F) /*i2c_handler*/;
-    }
+    slave.update();
 }
-
-//i2c demo
-
-// uint8_t *operation = (uint8_t *)malloc(sizeof(uint8_t)); //opcode
-// uint64_t parameter; //parameter to operation
-// int bytes_read = 0; //bytes read off i2c
-
-// while(1){
-//     //check for i2c message
-//     if(bytes_read == 0) {
-//         bytes_read += i2c_slave_read_buffer(0, operation, 1, 0);
-//     }
-
-//     //if message is received but unprocessed
-//     if(bytes_read > 0) {
-//         int paramater_size; //expected size of parameter argument in bytes
-//         parameter = 0; //reset parameter value
-
-
-//         //operation receipt
-//         bytes_read -= i2c_slave_write_buffer(0, operation, 1, 0);
-
-//         //parse parameter length
-//         paramater_size = *operation >> 5;
-//         if(paramater_size > 4) paramater_size = 4; //parameter size should be 4 bytes or smaller
-//         Serial.printf("Message received 0x%02X -> %d-Byte Parameter", *operation, paramater_size);
-        
-//         //process parameter if applicable
-//         if(paramater_size > 0) {
-//             uint8_t *rx_data = (uint8_t *)malloc(sizeof(uint8_t)); //byte received over i2c
-
-//             //receive parameter byte(s)
-//             while(paramater_size > 0) {
-//                 //check for i2c message
-//                 if(i2c_slave_read_buffer(0, rx_data, 1, 0)) {
-//                     paramater_size--;
-
-//                     //combine bytes
-//                     parameter += *rx_data << (8*paramater_size);
-//                 }
-//             }
-//             Serial.printf("Parameter received: 0x%X", parameter);
-//         }
-
-//         //return data if applicable
-//         if(*operation == 0x32) { //Get Time
-//             if(parameter == 0xEE) { //Epoch
-//                 uint32_t buffer;
-//                 int data_size = 4; //number of bytes to be transmitted
-//                 int tx_size = data_size+1; //number of bytes to be transmitted including start byte
-//                 uint8_t *tx_data = (uint8_t *)malloc((tx_size)*sizeof(uint8_t)); //data to transmit
-                
-//                 //get data
-//                 buffer = rtc.getEpoch();
-
-//                 //split data into individual bytes
-//                 tx_data[0] = 0xFF; //start byte
-//                 tx_data[1] = (buffer & 0xFF000000) >> 24;
-//                 tx_data[2] = (buffer & 0x00FF0000) >> 16;
-//                 tx_data[3] = (buffer & 0x0000FF00) >> 8;
-//                 tx_data[4] = (buffer & 0x000000FF);
-//                 Serial.printf("Data Response: %X -> %02X %02X %02X %02X", buffer, tx_data[1], tx_data[2], tx_data[3], tx_data[4]);
-
-//                 //send data
-//                 i2c_slave_write_buffer(0, tx_data, tx_size, 0);
-//             }
-//             else if (parameter == 0x4D) { //ms
-//             }
-//             else { //Invalid Parameter
-
-//             }
-//         }
-//         Serial.println("End Message");
-//     }
-// }
