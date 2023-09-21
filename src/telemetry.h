@@ -18,25 +18,25 @@ using namespace std;
 
 //Char Length Definitions
 #define number_of_temp_sensors  16  // Number of temperatures sensors being read by adc
-#define number_of_watt_outs     2   // Number of discrete wattage outputs
 
 #define cell_size_epoch         9   // Length of char* to hold each time value in .csv
 #define cell_size_mSecond       4   // Length of char* to hold each time value in .csv
 #define cell_size_temp          8   // Length of char* to hold each temp value in .csv
-#define cell_size_watt          7   // Length of char* to hold each wattage value in .csv
+#define cell_size_pwm_duty      4
+#define cell_size_pwm_period    5
 
 #define type_size_time          (cell_size_epoch + cell_size_mSecond + 2)  // Length of char* to hold all time values in .csv
 #define type_size_temp          (number_of_temp_sensors * cell_size_temp + number_of_temp_sensors)   // Length of char* to hold all temp values in .csv
-#define type_size_watt          (number_of_watt_outs * cell_size_watt + number_of_watt_outs)   // Length of char* to hold all watt values in .csv
+#define type_size_pwm           (cell_size_pwm_duty + cell_size_pwm_period)   // Length of char* to hold all pwm values in .csv
 
-#define line_size               (type_size_time + type_size_temp + type_size_watt + 3)   // Length of char* to hold all telemetry in .csv
+#define line_size               (type_size_time + type_size_temp + type_size_pwm + 3)   // Length of char* to hold all telemetry in .csv
 
 #define char_precision_temp     3   // Precision of char* to hold temp value in .csv
-#define char_precision_watt     3   // Precision of char* to hold wattage value in .csv
+#define char_precision_pwm      3   // Precision of char* to hold pwm duty values in .csv
 
 /**
  * @brief Payload telemetry structure
- * @note - Contains time, temperatures, and wattage data
+ * @note - Contains time, temperatures, and pwm out data
  * @note - Contains built-in functions to copy telemetry data to char[]s suitable for a .csv file
  */
 struct Telemetry{
@@ -44,7 +44,9 @@ struct Telemetry{
     unsigned long Seconds; // time: Seconds portion
     unsigned int mSeconds; // time: micro-Seconds portion
     float Sens[number_of_temp_sensors]; // temperature array
-    float Watt[number_of_watt_outs]; // wattage array; todo: change to duty cycle
+    int pwm_Duty; // pwm duty cycle (percentage)
+    float pwm_Period; // pwm period length
+    // float PWM[number_of_pwm_outs]; // pwm array; todo: change to duty cycle
 
     ESP32Time realtime; //for testing
 
@@ -95,24 +97,24 @@ struct Telemetry{
     void TempToCSV(char *CellChar, int channel);
 
     /**
-     * @brief Copies wattage telemetry into a string
+     * @brief Copies PWM telemetry into a string
      * 
-     * @param WattChar destination string. length must be [type_size_watt]
+     * @param PWMChar destination string. length must be [type_size_pwm]
      */
-    void WattToCSV(char *WattChar);
+    void PWMToCSV(char *PWMChar);
 
     /**
-     * @brief Copies a wattage member into a string
+     * @brief Copies a PWM member into a string
      * 
-     * @param CellChar destination string. length must be [cell_size_watt]
-     * @param channel wattage output channel number. from [0] to [number_of_watt_outs]
+     * @param CellChar destination string. length must be [cell_size_pwm]
+     * @param channel PWM output channel number. from [0] to [number_of_pwm_outs]
      */
-    void WattToCSV(char *CellChar, int channel);
+    void PWMToCSV(char *DutyChar, char*PeriodChar);
 
     /**
      * @brief Copies csv header template into a string
      * 
-     * @param LineChar destination string. minimum length depends on number of temps and watt outs
+     * @param LineChar destination string. minimum length depends on number of temps and pwm outs
      */
     void headerCSV(char *LineChar);
 
@@ -157,6 +159,8 @@ struct Telemetry{
      * @param milli milliseconds
      */
     void setTime(unsigned long epoch, unsigned int milli);
+
+    void setPWM(int duty_percentage, float cycle_period);
 
 
     //void import(String inputString);

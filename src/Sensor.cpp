@@ -12,10 +12,13 @@ SensorCore::SensorCore(){
     esp_adc_cal_characterize(ADC_UNIT_1, _adc_attenuation, ADC_WIDTH_BIT_12, ESP_ADC_CAL_VAL_DEFAULT_VREF, &adc1_chars);
     esp_adc_cal_characterize(ADC_UNIT_2, _adc_attenuation, ADC_WIDTH_BIT_12, ESP_ADC_CAL_VAL_DEFAULT_VREF, &adc2_chars);
     adc_set_data_inv((adc_unit_t)3, true); //inverts both adcs; unsure why this is needed :|
+
+    // adc_power_acquire();
 }
 
 SensorCore::~SensorCore(){
-    //turn off adc??
+    log_i("POWER ADC OFF");
+    // adc_power_release();
 }
 
 void SensorCore::init(ESP32Time *time){
@@ -31,6 +34,7 @@ void SensorCore::readADC1(int *value_out, adc1_channel_t channel){
     //read ADC
     adc1_get_raw(channel); //ignore first reading
     buffer = adc1_get_raw(channel);
+    log_v("ADC1(%i) read at %i", channel, buffer);
 
     //write to provided int var
     *value_out = buffer;
@@ -42,6 +46,7 @@ void SensorCore::readADC2(int *value_out, adc2_channel_t channel){
     //read ADC
     adc2_get_raw(channel, ADC_WIDTH_BIT_12, &ignore); //ignore first reading
     adc2_get_raw(channel, ADC_WIDTH_BIT_12, &buffer);
+    log_v("ADC2(%i) read at %i", channel, buffer);
 
     //write to provided int var
     *value_out = buffer;
@@ -81,10 +86,11 @@ float SensorCore::sample(int sensor){
     //Convert voltage to temperature (K) usin thermistor characteristics
     resistance = ((THERMISTORNOMINAL*SUPPLYVOLTAGE)/voltage)-THERMISTORNOMINAL;
     temperature = (BCOEFFICIENT/log(resistance/r_inf))-KELVIN;
+    log_d("Sensor %i sampled at %f", sensor, temperature);
 
     //debug to uart
     // char debug[128];
-    // sprintf(debug, "Sensor %i -> Channel %i :: @%i -> %imV -> [%.3fR]%.3fK\n", sensor, adc_channel, average_reading, voltage, resistance, temperature);
+    // sprintf(debug, "Sensor %i -> Channel %i :: @%i -> %imV -> [%.3fR]%.3fK", sensor, adc_channel, average_reading, voltage, resistance, temperature);
     // Serial.println(debug);
 
     return temperature;
@@ -108,5 +114,21 @@ void SensorCore::snapshot(Telemetry *telemetry_out){
 
         //Put data into Telemetry object
         telemetry_out->setTemp(sensor, buffer);
+        log_d("Sensor snapshot to telemetry");
     }
+}
+
+float SensorCore::test(){
+    float average = 0;
+
+    for(int sensor = 0; sensor < number_of_temp_sensors; sensor++){
+        float buffer = sample(sensor);
+        log_v("Sensor %i @ %f", sensor, buffer);
+        average += buffer;
+    }
+
+    average /= number_of_temp_sensors;
+    log_d("SensorCore tested. Average temperature: %f", average);
+
+    return average;
 }

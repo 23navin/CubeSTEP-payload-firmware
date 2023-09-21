@@ -13,6 +13,8 @@
 #include "driver/gpio.h"
 #include "ESP32Time.h"
 
+#include "Telemetry.h"
+
 // TIMER
 #define TIMER_DIVIDER           65536
 #define TIMER_SCALE             (TIMER_BASE_CLK / TIMER_DIVIDER)  // one second
@@ -98,15 +100,25 @@ public:
      */
     void setDutyPeriod(float duty_period);
 
+    /**
+     * @brief Set the PWM length and duty cycle
+     * 
+     * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
+     * @param period Length of the PWM duty (seconds)
+     */
     void setDutyCycle(int duty_cycle, float period);
 
+    /**
+     * @brief Set the Duty Cycle
+     * 
+     * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
+     */
     void setDutyCycle(int duty_cycle);
-
 
     /**
      * @brief Get the Cycle Period object
      * 
-     * @return float 
+     * @return float
      */
     float getCyclePeriod();
 
@@ -116,6 +128,17 @@ public:
      * @return float 
      */
     float getDutyPeriod();
+
+    inline int getDutyCycle(){
+        return (int)((dutyPeriod/cyclePeriod)*100);
+    }
+
+    inline bool getStatus(){
+        return statusTimer;
+    }
+
+    void snapshot(Telemetry *telemetry_out);
+
 
 private:
     /**

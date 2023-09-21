@@ -86,6 +86,8 @@ public:
      */
     void snapshot(Telemetry *telemetry_out);
 
+    float test();
+
 private:
     ESP32Time realtime; //Time object to hold the current time that corresponds to the sensor's readings
     

@@ -19,30 +19,29 @@ Telemetry::Telemetry(){
 }
 
 void Telemetry::ToCSV(char *LineChar){
-    char Line[line_size]; // "<time>,<watt>,<temp>\n\0"
+    char Line[line_size]; // "<time>,<pwm>,<temp>\n\0"
+    char TimeBuffer[type_size_time]; // "<sec>,<usec>\0"
+    char PWMBuffer[type_size_pwm]; // "<pwm0>,<pwm1>,...\0"
+    char TempBuffer[type_size_temp]; // "<sens0>,<sens1>,...\0"
 
     //time
-    char TimeBuffer[type_size_time]; // "<sec>,<usec>\0"
-
     TimeToCSV(TimeBuffer);
     strcpy(Line, TimeBuffer);
 
     strncat(Line, ",", 2);
-    //temp
-    char TempBuffer[type_size_temp]; // "<sens0>,<sens1>,...\0"
 
+    //PWM
+    PWMToCSV(PWMBuffer);
+    strncat(Line, PWMBuffer, type_size_pwm);
+
+    strncat(Line, ",", 2);
+
+    //temp
     TempToCSV(TempBuffer);
     strncat(Line, TempBuffer, type_size_temp);
 
-    strncat(Line, ",", 2);
-    //Watt
-    char WattBuffer[type_size_watt]; // "<watt0>,<watt1>,...\0"
-
-    WattToCSV(WattBuffer);
-    strncat(Line, WattBuffer, type_size_watt);
-
+    //end
     strncat(Line,"\n",2); // end line
-    //output
     strcpy(LineChar, Line);
 }
 
@@ -63,7 +62,7 @@ void Telemetry::TimeToCSV(char *SecondsChar, char*uSecondsChar){
 
     if((SecondsChar < 0) && (uSecondsChar < 0)){ //need to increase robustness/error checking
         strcpy(SecondsChar, "XXXXXXXX");
-        strcpy(uSecondsChar, "XXXXXXXX");
+        strcpy(uSecondsChar, "XXX");
     }
     else {
         int ret = snprintf(Buffer, cell_size_epoch, "%.8x", Seconds); // todo: add definitions
@@ -147,42 +146,29 @@ void Telemetry::TempToCSV(char *CellChar, int channel){
 //     }
 // }
 
-void Telemetry::WattToCSV(char *WattChar){
-    char Buffer[type_size_watt];
-    if(Watt[0] < 0.0){
-        strcpy(Buffer, "XX.XXX"); // todo: need to make function with respect to definitions
-    }
-    else {
-        snprintf(Buffer, cell_size_watt, "%6.3f", Watt[0]);
-    }
+void Telemetry::PWMToCSV(char *PWMChar){
+    char Buffer[type_size_pwm]; // "<duty>,<period>\0"
+    char DutyBuffer[cell_size_pwm_duty]; // "<duty>\0"
+    char PeriodBuffer[cell_size_pwm_period]; // "<period>\0"
 
-    for(int i=1; i<number_of_watt_outs; i++){
-        char WattBuffer[cell_size_watt];
-        char CellBuffer[cell_size_watt+1];
-        if(Watt[i] < 0.0){
-            strncat(Buffer, ",XX.XXX", cell_size_watt+1);
-        }
-        else {
-            WattToCSV(WattBuffer, i);
-            snprintf(CellBuffer, cell_size_watt+1, ",%s",WattBuffer);
-            strncat(Buffer, CellBuffer, cell_size_watt+1);
-        }
-    }
+    PWMToCSV(DutyBuffer, PeriodBuffer);
 
-    strcpy(WattChar, Buffer);
+    snprintf(Buffer, type_size_pwm, "%s,%s",DutyBuffer, PeriodBuffer);
+    strcpy(PWMChar, Buffer);
 }
 
-void Telemetry::WattToCSV(char *CellChar, int channel){
-    char Buffer[cell_size_watt];
+void Telemetry::PWMToCSV(char *DutyChar, char*PeriodChar){
+    char DutyBuffer[cell_size_epoch]; // "<duty>\0"
+    char PeriodBuffer[cell_size_mSecond]; // <period>\0
 
-    if(Watt[channel] < 0){
-        strcpy(CellChar, "XX.XXX");
+    int ret = snprintf(DutyBuffer, cell_size_pwm_duty, "%3i", pwm_Duty); // todo: add definitions
+    if(ret > 0){
+        strcpy(DutyChar, DutyBuffer);
     }
-    else {
-        int ret = snprintf(Buffer, cell_size_watt, "%6.3f", Watt[channel]); // todo: add definitions
-        if(ret > 0){
-            strcpy(CellChar, Buffer);
-        }
+
+    ret = snprintf(PeriodBuffer, cell_size_pwm_period, "%4f", pwm_Period); // todo: add definitions
+    if(ret > 0){
+        strcpy(PeriodChar, PeriodBuffer);
     }
 }
 
@@ -190,18 +176,15 @@ void Telemetry::headerCSV(char *LineChar){
     char LineBuffer[1000];
 
     //time
-    strcpy(LineBuffer, "system_time (seconds),system_time (micro_seconds)");
+    strcpy(LineBuffer, "sys_Time(S),sys_Time(mS)");
+    
+    //pwm
+    strcat(LineBuffer, ",pwm_Duty(%),pwm_Period(S)");
+
     //temp
     for(int i=0; i<number_of_temp_sensors; i++){
         char buffer[100];
-        sprintf(buffer, ",temp_sensor_%d (degrees_kelvin)", i);
-        strcat(LineBuffer, buffer);
-    }
-
-    //watt
-    for(int i=0; i<number_of_watt_outs; i++){
-        char buffer[100];
-        sprintf(buffer, ",watt_out_%d (volts)", i);
+        sprintf(buffer, ",temp_%d(K)", i);
         strcat(LineBuffer, buffer);
     }
 
@@ -211,16 +194,15 @@ void Telemetry::headerCSV(char *LineChar){
 }
 
 void Telemetry::clear(){
+    Seconds = 0;
+    mSeconds = 0;
+
+    pwm_Duty = 0;
+    pwm_Period = 0;
+
     for(int i = 0; i < number_of_temp_sensors; i++){
         Sens[i] = 0.0;
     }
-
-    for(int i = 0; i < number_of_watt_outs; i++){
-        Watt[i] = 0.0;
-    }
-
-    Seconds = 0;
-    mSeconds = 0;
 }
 
 void Telemetry::random(ESP32Time *realtime){
@@ -230,14 +212,13 @@ void Telemetry::random(ESP32Time *realtime){
     Seconds = realtime->getEpoch();
     mSeconds = realtime->getMillis();
 
+    //pwm
+    pwm_Duty = rand() % 101 + 1;
+    pwm_Period = 12;
+
     //temp
     for(int i=0; i < number_of_temp_sensors; i++){
         Sens[i] = 1.0 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(500.0-1.0)));
-    }
-
-    //watt
-    for(int i=0; i < number_of_watt_outs; i++){
-        Watt[i] = static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(12.0)));
     }
 }
 
@@ -260,4 +241,9 @@ void Telemetry::setTime(){
 void Telemetry::setTime(unsigned long epoch, unsigned int milli){
     Seconds = epoch;
     mSeconds = milli;
+}
+
+void Telemetry::setPWM(int duty_percentage, float cycle_period){
+    pwm_Duty = duty_percentage;
+    pwm_Period = cycle_period;
 }

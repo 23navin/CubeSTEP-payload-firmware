@@ -58,6 +58,12 @@ public:
 
     std::vector<String> loadFile(const char *path);
 
+    int read_file(std::string *string_out);
+
+    void select_file(const char *path);
+
+    void deselect_file();
+
     /**
      * @brief creates a file
      * 
@@ -93,8 +99,13 @@ public:
      * @brief benchmark to measure read and write time for a 1MB file
      * 
      * @param path location of benchmark file
+     * @return time in milliseconds
      */
-    void testFileIO(const char * path);
+    uint32_t testFileIO(const char * path);
+
+private:
+    File open_file;
+    uint8_t line;
 };
 
 #endif // _file_H_INCLUDED
