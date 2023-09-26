@@ -23,7 +23,9 @@
 
 #define START_BYTE 0xAA
 #define END_BYTE 0x04
+#define VALID 0x88
 #define INVALID 0xFF
+#define UNKNOWN 0x44
 
 #define I2C_SLAVE_TX_BUF_LEN (2 * DATA_LENGTH)              /*!< I2C slave tx buffer size */
 #define I2C_SLAVE_RX_BUF_LEN (2 * DATA_LENGTH)              /*!< I2C slave rx buffer size */
@@ -37,8 +39,10 @@ typedef void(*function_ptr)(uint32_t);
 
 
 /**
- * @brief 
- * 
+ * @brief Interface to read and write to I2C Bus
+ * @note - Scan Rx buffer for incoming messages
+ * @note - Parse and process messages
+ * @note - Limited framework to create a response
  */
 class I2cCore{
 public:
@@ -71,10 +75,11 @@ private:
     i2c_config_t config;
     gpio_num_t sda = I2C_SDA_PIN;
     gpio_num_t scl = I2C_SCL_PIN;
-    uint16_t address = DEVICE_ADDR;
+    uint32_t address = DEVICE_ADDR;
 
     //Rx Data
     uint8_t *operation; //opcode
+    uint8_t *rx_param; //parameter read buffer
     uint32_t parameter; //parameter to operation
     
     int bytes_read = 0; //bytes read off i2c

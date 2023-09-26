@@ -27,6 +27,7 @@ I2cCore::I2cCore(){
     opcode_counter = -1;
 
     operation = new uint8_t;
+    rx_param = new uint8_t;
     tx_buffer_one_byte = new uint8_t;
     tx_buffer = new uint8_t[BUFFER_SIZE];
 
@@ -43,6 +44,7 @@ I2cCore::~I2cCore(){
     // //free(tx_buffer2);
 
     delete operation;
+    delete rx_param;
     delete tx_buffer_one_byte;
     delete[] tx_buffer;
 }
@@ -66,11 +68,11 @@ void I2cCore::init(){
         log_d("Device Address: %02x", DEVICE_ADDR);
     }
 
-    //If software restart by I2C (OpCode 0x21), echo parameter \
-    to complete communication.
+    //If software restart by I2C (OpCode 0x21-05), send \
+    confirmation to complete communication.
     if(esp_reset_reason() == ESP_RST_SW) {
-        log_d("Software restart complete");
-        write_one_byte(0x05);
+        log_i("Software restart complete");
+        write_one_byte(VALID);
     }
 }
 
@@ -207,20 +209,17 @@ bool I2cCore::check_for_message(){
         
         //process parameter if applicable
         if(paramater_size > 0) {
-            uint8_t *rx_data = new uint8_t; //byte received over i2c
-
             //receive parameter byte(s)
             while(paramater_size > 0) {
                 //check for i2c message
-                if(read(rx_data)) {
+                if(read(rx_param)) {
                     paramater_size--;
 
                     //combine bytes
-                    parameter += *rx_data << (8*paramater_size);
+                    parameter += *rx_param << (8*paramater_size);
                 }
             }
             log_i("Parameter received: %x", parameter);
-            delete rx_data;
         }
 
         return true;
@@ -246,11 +245,11 @@ void I2cCore::find_handler(uint8_t opcode, uint32_t parameter){
     for(int i = 0; i <= opcode_counter; i++){
         if(opcode_list[i] == opcode){
             opcode_id = i;
-            // handler_list[i](parameter);
             break;
         }
     }
     if(opcode_id != -1){
+        log_d("Calling handler for OpCode 0x%02X", opcode_id);
         handler_list[opcode_id](parameter);
     }
     else{

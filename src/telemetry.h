@@ -125,7 +125,7 @@ struct Telemetry{
     void clear();
 
     /**
-     * @brief Sets all member variables to a random value
+     * @brief Sets all member variables to a random value (deprecated, do not use)
      * @note Uses rand()
      * 
      */
