@@ -205,6 +205,7 @@ void Telemetry::clear(){
     }
 }
 
+//do not use
 void Telemetry::random(ESP32Time *realtime){
     delay(rand() % 5000);
 
