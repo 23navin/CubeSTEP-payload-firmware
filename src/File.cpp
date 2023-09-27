@@ -116,18 +116,20 @@ int FileCore::read_file(std::string *string_out){
     return -1;
 }
 
-void FileCore::writeFile(const char * path, const char * message){
+esp_err_t FileCore::writeFile(const char * path, const char * message){
     log_d("Writing file: %s\r", path);
 
     File file = SPIFFS.open(path, FILE_WRITE);
     if(!file){
         Serial.println("- failed to open file for writing");
-        return;
+        return ESP_FAIL;
     }
     if(file.print(message)){
         log_d("- file written");
+        return ESP_OK;
     } else {
         log_w("- write failed");
+        return ESP_FAIL;
     }
     file.close();
 }
@@ -157,12 +159,14 @@ void FileCore::renameFile(const char * path1, const char * path2){
     }
 }
 
-void FileCore::deleteFile(const char * path){
+esp_err_t FileCore::deleteFile(const char * path){
     log_d("Deleting file: %s\r", path);
     if(SPIFFS.remove(path)){
         log_d("- file %s deleted", path);
+        return ESP_OK;
     } else {
         log_w("- %s delete failed", path);
+        return ESP_FAIL;
     }
 }
 

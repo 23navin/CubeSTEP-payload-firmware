@@ -8,19 +8,24 @@
 #include "Experiment.h"
 
 Experiment::Experiment(){
-    stage_count = 0;
     status = false;
     logger_status = false;
     pwm_duty = new uint8_t[STAGE_COUNT_MAX];
+    length = new uint32_t[STAGE_COUNT_MAX];
+
+    stage_count = 10;
     pwm_period = 12; //12 seconds default
-    length = min_to_ms(45); //45 minutes default
     sample_interval = min_to_ms(1); //1 minute default
     startup_length = min_to_ms(10); //10 minute default
     cooldown_length = min_to_ms(30); //30 minute default
+    set_stage_length(min_to_ms(45)); //45 minute default
+
+    generate_pwm_duty_array();
 }
 
 Experiment::~Experiment(){
     delete[] pwm_duty;
+    delete[] length;
 }
 
 exp_err_t Experiment::set_stage_count(uint8_t stage_count_value){
@@ -46,12 +51,21 @@ exp_err_t Experiment::set_stage_pwm_duty(uint8_t stage, uint8_t pwm_duty_value){
     return EXP_OK;
 }
 
+exp_err_t Experiment::set_stage_length(uint32_t length_value){
+    for(int i = 0; i < STAGE_COUNT_MAX; i++){
+        length[i] = length_value;
+    }
+
+    return EXP_OK;
+}
+
+
 exp_err_t Experiment::set_max_temperature(float temperature_value){
     max_temperature = temperature_value;
     return EXP_OK;
 }
 
-exp_err_t Experiment::generate_parameters(){
+exp_err_t Experiment::generate_pwm_duty_array(){
     for(int i = 0; i < stage_count; i++){
         pwm_duty[i] = ((float)100/stage_count)*(i+1);;
     }

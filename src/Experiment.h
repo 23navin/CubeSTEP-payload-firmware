@@ -42,7 +42,7 @@ struct Experiment
     uint8_t current_stage; //Number of the stage the experiment is currently in
     uint8_t *pwm_duty; //Array that contains the PWM duty for each stage
     float pwm_period; //Length of PWM signal's period in seconds
-    uint32_t length; //Length of each PWM stage is milli-seconds
+    uint32_t *length; //Length of each PWM stage is milli-seconds
     uint32_t sample_interval; //Time (milli-seconds) between each temperature sample
     uint32_t startup_length; //Length of time before experiment starts in milli-seconds
     uint32_t cooldown_length; //Length of time after experiment ends before task ends in milli-seconds
@@ -100,7 +100,7 @@ struct Experiment
      * 
      * @return exp_err_t 
      */
-    exp_err_t generate_parameters();
+    exp_err_t generate_pwm_duty_array();
 };
 
 #endif // _Experiment_H_included

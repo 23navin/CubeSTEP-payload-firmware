@@ -26,6 +26,9 @@
 #define PWM_OUTPUT_PIN          GPIO_NUM_5 // GPIO pin used for PWM output
 #define GPIO_OUTPUT_PIN_SEL     (1ULL<<PWM_OUTPUT_PIN)
 
+// Parameter Checls
+#define PWM_PERIOD_MIN          (0.1)
+
 /**
  * @brief Interface to control PWM output for battery heaters
  * @note - Configure GPIO pad

@@ -56,10 +56,10 @@ void setTimeToCompile(ESP32Time *object)
  * @param file_p 
  * @param tele 
  */
-void createLog(FileCore *file_p, Telemetry *tele){
+esp_err_t createLog(FileCore *file_p, Telemetry *tele){
     char header[1000];
     tele->headerCSV(header);
-    file_p->writeFile("/log.csv", header);
+    return file_p->writeFile("/log.csv", header);
 }
 
 /**
@@ -67,8 +67,8 @@ void createLog(FileCore *file_p, Telemetry *tele){
  * 
  * @param file_p 
  */
-void deleteLog(FileCore *file_p) {
-    file_p->deleteFile("/log.csv");
+esp_err_t deleteLog(FileCore *file_p) {
+    return file_p->deleteFile("/log.csv");
 }
 
 /**
@@ -105,7 +105,9 @@ FileCore storage;
 SensorCore sensor;
 HeaterCore pwm;
 I2cCore slave;
+
 Experiment payload;
+Telemetry active;
 
 /* Task Handles */
 
@@ -173,11 +175,11 @@ void exp_run(void *pvParameters){
             }
 
             //set pwm to stage pwm param
-            log_i("Advancing to Stage %i (%i ms)", payload.current_stage, payload.length);
+            log_i("Advancing to Stage %i (%i ms)", payload.current_stage, payload.length[payload.current_stage]);
             pwm.setDutyCycle(payload.pwm_duty[payload.current_stage]);
 
             //wait stage length
-            vTaskDelay(payload.length / portTICK_PERIOD_MS);
+            vTaskDelay(payload.length[payload.current_stage] / portTICK_PERIOD_MS);
             
             payload.current_stage++;
         }
@@ -372,10 +374,10 @@ void i2c_handler_start_experiment(uint32_t parameter){
     //check if experiment is already running
     if(payload.status == EXP_INACTIVE) {
         //start logging
-        xTaskCreatePinnedToCore(exp_log, "logger", 4096, NULL, 1, &exp_log_task, 1);
+        xTaskCreatePinnedToCore(exp_log, "logger", 4096, NULL, 2, &exp_log_task, 1);
 
         //start experiment
-        xTaskCreatePinnedToCore(exp_run, "experiment", 4096, NULL, 2, &exp_run_task, 1); //i2c on core 0
+        xTaskCreatePinnedToCore(exp_run, "experiment", 4096, NULL, 1, &exp_run_task, 1); //i2c on core 0
         
         slave.write_one_byte(VALID);
     }
@@ -504,7 +506,7 @@ void i2c_handler_set_number_of_stages(uint32_t parameter){
         payload.set_stage_count(parameter);
         log_i("Exp Stage Count set to %i", payload.stage_count);
 
-        payload.generate_parameters();
+        payload.generate_pwm_duty_array();
         log_i("Exp PWM progression generated");
 
         slave.write_one_byte(VALID);
@@ -528,10 +530,47 @@ void i2c_handler_set_number_of_stages(uint32_t parameter){
 void i2c_handler_set_stage_length(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
-        payload.length = parameter;
-        log_i("Exp Stage Length set to %i ms", payload.length);
+        payload.set_stage_length(parameter);
+        log_i("Exp All Stage Lengths set to %i ms", payload.length[0]);
 
         slave.write_one_byte(VALID);
+    }
+    else{
+        slave.write_one_byte(INVALID);
+    }
+}
+
+/**
+ * @brief OpCode 0x9D
+ * @note Set the amount of time that the experiment will spend
+ * on a specified stage.
+ * 
+ * @param Stage
+ * @param PWM_Duty_%
+ * 
+ * @return  
+ */
+void i2c_handler_set_individual_length(uint32_t parameter){
+    //do not allow changing while experiment is active
+    if(!payload.status){
+        //parse parameter
+        uint8_t stage = (parameter >> 24) & 0xFF;
+        uint32_t length = parameter & 0xFFFFFF;
+
+        log_w("stage: %i, length %i", stage, length);
+
+        //check values
+        if(stage >= payload.stage_count){
+            slave.write_one_byte(0xFD);
+        }
+        else{
+            //set value
+            payload.length[stage] = length;
+            log_i("Exp PWM at Stage #%i set to %i%", stage, payload.length[stage]);
+
+            slave.write_one_byte(VALID);
+        }
+       
     }
     else{
         slave.write_one_byte(INVALID);
@@ -589,6 +628,43 @@ void i2c_handler_set_cooldown_length(uint32_t parameter){
 }
 
 /**
+ * @brief OpCode 0x5A
+ * @note Set the PWM Duty % of a specific stage
+ * 
+ * @param Stage
+ * @param PWM_Duty_%
+ * 
+ * @return  
+ */
+void i2c_handler_set_individual_pwm(uint32_t parameter){
+    //do not allow changing while experiment is active
+    if(!payload.status){
+        //parse parameter
+        uint8_t stage = (parameter >> 8) & 0xFF;
+        uint8_t pwm = parameter & 0xFF;
+
+        //check values
+        if(stage >= payload.stage_count){
+            slave.write_one_byte(0xFD);
+        }
+        else if(pwm > 100){
+            slave.write_one_byte(0xFE);
+        }
+        else{
+            //set value
+            payload.length[stage] = pwm;
+            log_i("Exp PWM at Stage #%i set to %i%", stage, payload.length[stage]);
+
+            slave.write_one_byte(VALID);
+        }
+       
+    }
+    else{
+        slave.write_one_byte(INVALID);
+    }
+}
+
+/**
  * @brief OpCode 0x9B (untested)
  * @note Set the PWM output signal's period attribute. System
  * intended for periods greater than one second but can handle
@@ -608,10 +684,17 @@ void i2c_handler_set_pwm_period(uint32_t parameter){
             uint32_t uint_data;
         } float_to_uint = { .uint_data = parameter };
 
-        payload.pwm_period = float_to_uint.float_data;
-        log_i("Exp PWM Period set to %f s", payload.pwm_period);
+        //check float value
+        if(float_to_uint.float_data < PWM_PERIOD_MIN) {
+            slave.write_one_byte(0xFD);
+        }
+        else{
+            payload.pwm_period = float_to_uint.float_data;
+            log_i("Exp PWM Period set to %f s", payload.pwm_period);
 
-        slave.write_one_byte(VALID);
+            slave.write_one_byte(VALID);
+        }
+
     }
     else{
         slave.write_one_byte(INVALID);
@@ -712,6 +795,34 @@ void i2c_handler_get_log(uint32_t parameter){
         
         slave.write_one_byte(INVALID);
     }
+}
+
+/**
+ * @brief OpCode 0x1C
+ * @note Deletes the experiment log and creates a blank
+ * log.
+ * 
+ * @param _unused
+ * 
+ * @return VALID upon log reset 
+ * @return INVALID if SPI error
+ */
+void i2c_handler_reset_log(uint32_t parameter){
+    esp_err_t err;
+
+    err = deleteLog(&storage);
+    if(err != ESP_OK){
+        slave.write_one_byte(INVALID);
+        return;
+    }
+
+    err = createLog(&storage, &active);
+    if(err != ESP_OK){
+        slave.write_one_byte(INVALID);
+        return;
+    }
+
+    slave.write_one_byte(VALID);
 }
 
 /**
@@ -818,7 +929,6 @@ void setup(){
     pwm.initPWM();
 
     // SPI Flash log control
-    Telemetry active;
     deleteLog(&storage);
     createLog(&storage, &active);
 
@@ -839,10 +949,13 @@ void setup(){
     slave.install_i2c_handler(0x34, i2c_handler_get_temperature);
     slave.install_i2c_handler(0x15, i2c_handler_get_pwm_duty);
     slave.install_i2c_handler(0x16, i2c_handler_get_current_stage);
+    slave.install_i2c_handler(0x97, i2c_handler_set_sampling_interval);
     slave.install_i2c_handler(0x98, i2c_handler_set_startup_length);
     slave.install_i2c_handler(0x99, i2c_handler_set_cooldown_length);
-    slave.install_i2c_handler(0x97, i2c_handler_set_sampling_interval);
+    slave.install_i2c_handler(0x5A, i2c_handler_set_individual_pwm);
     slave.install_i2c_handler(0x9B, i2c_handler_set_pwm_period);
+    slave.install_i2c_handler(0x1C, i2c_handler_reset_log);
+    slave.install_i2c_handler(0x9D, i2c_handler_set_individual_length);
     
     log_i("Setup completed.");
 

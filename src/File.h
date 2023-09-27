@@ -70,7 +70,7 @@ public:
      * @param path file's location
      * @param message data to be written on creation
      */
-    void writeFile(const char * path, const char * message);
+    esp_err_t writeFile(const char * path, const char * message);
 
     /**
      * @brief appends data to the end of an existing file
@@ -93,7 +93,7 @@ public:
      * 
      * @param path file to be removed
      */
-    void deleteFile(const char * path);
+    esp_err_t deleteFile(const char * path);
 
     /**
      * @brief benchmark to measure read and write time for a 1MB file
