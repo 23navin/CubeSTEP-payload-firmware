@@ -25,13 +25,12 @@ I2cCore::I2cCore(){
     config.clk_flags = 0;
 
     opcode_counter = -1;
+    opcode_counter = -1;
 
     operation = new uint8_t;
     rx_param = new uint8_t;
     tx_buffer_one_byte = new uint8_t;
     tx_buffer = new uint8_t[BUFFER_SIZE];
-
-    //tx_buffer[0] = START_BYTE;
 }
 
 I2cCore::~I2cCore(){
@@ -240,15 +239,43 @@ void I2cCore::install_i2c_handler_unused(void (*i2c_handler_ptr)(uint32_t)){
     handler_invalid = i2c_handler_ptr;
 }
 
+void I2cCore::install_i2c_handler_ignore(void (*i2c_handler_ptr)(uint32_t)){
+    handler_ignore = i2c_handler_ptr;
+}
+
+void I2cCore::ignore_opcode(uint8_t opcode){
+    ++opcode_ignore_counter;
+    opcode_ignore_list[opcode_ignore_counter] = opcode;
+
+    log_d("%#02x will be ignored", opcode_ignore_list[opcode_ignore_counter]);
+}
+
 void I2cCore::find_handler(uint8_t opcode, uint32_t parameter){
     int opcode_id = -1;
+
+    //check opcode ignore list
+    for(int i = 0; i <= opcode_ignore_counter; i++){
+        if(opcode_ignore_list[i] == opcode){
+            //if there is a match, exit function
+            opcode_id = i;
+            handler_ignore(parameter);
+
+            log_i("End Message");
+
+            return;
+        }
+    }
+
+    //check opcode list
     for(int i = 0; i <= opcode_counter; i++){
         if(opcode_list[i] == opcode){
             opcode_id = i;
             break;
         }
     }
-    if(opcode_id != -1){
+
+    //call handler if there is a match
+    if(opcode_id > -1){
         log_d("Calling handler for OpCode 0x%02X", opcode_id);
         handler_list[opcode_id](parameter);
     }

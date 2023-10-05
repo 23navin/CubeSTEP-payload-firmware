@@ -231,7 +231,16 @@ void exp_log(void *pvParameters){
  * @return nothing
  */
 void i2c_handler_unused(uint32_t parameter){
-    log_w("Invalid Opcode");
+    log_w("Undefined Opcode");
+}
+
+/**
+ * @brief Function called when an opcode is ignored
+ * 
+ * @return nothing
+ */
+void i2c_handler_ignore(uint32_t parameter){
+    log_i("OpCode Ignored");
 }
 
 /**
@@ -570,7 +579,6 @@ void i2c_handler_set_individual_length(uint32_t parameter){
 
             slave.write_one_byte(VALID);
         }
-       
     }
     else{
         slave.write_one_byte(INVALID);
@@ -934,6 +942,8 @@ void setup(){
 
     //define i2c handler call functions
     slave.install_i2c_handler_unused(i2c_handler_unused);
+    slave.install_i2c_handler_ignore(i2c_handler_ignore);
+    
     slave.install_i2c_handler(0x21, i2c_handler_restart_device);
     slave.install_i2c_handler(0x02, i2c_handler_sleep_device);
     slave.install_i2c_handler(0x06, i2c_handler_get_experiment_status);
@@ -956,6 +966,8 @@ void setup(){
     slave.install_i2c_handler(0x9B, i2c_handler_set_pwm_period);
     slave.install_i2c_handler(0x1C, i2c_handler_reset_log);
     slave.install_i2c_handler(0x9D, i2c_handler_set_individual_length);
+
+    slave.ignore_opcode(0x03);
     
     log_i("Setup completed.");
 

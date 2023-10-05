@@ -67,6 +67,8 @@ public:
     }
     void install_i2c_handler(uint8_t opcode, void (*i2c_handler_ptr)(uint32_t));
     void install_i2c_handler_unused(void (*i2c_handler_ptr)(uint32_t));
+    void install_i2c_handler_ignore(void (*i2c_handler_ptr)(uint32_t));
+    void ignore_opcode(uint8_t opcode);
     void find_handler(uint8_t opcode, uint32_t parameter);
     void update();
 
@@ -96,9 +98,12 @@ private:
 
     //call function handler
     uint8_t opcode_list[OPCODE_LIST_SIZE];
+    uint8_t opcode_ignore_list[OPCODE_LIST_SIZE];
     function_ptr handler_list[OPCODE_LIST_SIZE];
     function_ptr handler_invalid;
+    function_ptr handler_ignore;
     int opcode_counter;
+    int opcode_ignore_counter;
 };
 
 #endif // _i2c_H_included
