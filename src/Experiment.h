@@ -43,7 +43,8 @@ struct Experiment
     uint8_t *pwm_duty; //Array that contains the PWM duty for each stage
     float pwm_period; //Length of PWM signal's period in seconds
     uint32_t *length; //Length of each PWM stage is milli-seconds
-    uint32_t sample_interval; //Time (milli-seconds) between each temperature sample
+    uint32_t sample_interval; //Time (milli-seconds) between each temperature sample during experiment
+    uint32_t sample_passive_interval; //Time (milli-seconds) between each temperature sample for passive log
     uint32_t startup_length; //Length of time before experiment starts in milli-seconds
     uint32_t cooldown_length; //Length of time after experiment ends before task ends in milli-seconds
 
@@ -51,6 +52,7 @@ struct Experiment
     int status; //Indicates what stage the  experiment task is in.
     bool stop_flag; //If set to true, active experiment will exit once current PWM stage is completed
     bool logger_status; //if true, logger is active
+    bool passive_logger_status; //if true, passive logger is active
 
     /* methods */
 

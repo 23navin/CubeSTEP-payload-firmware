@@ -114,8 +114,9 @@ void SensorCore::snapshot(Telemetry *telemetry_out){
 
         //Put data into Telemetry object
         telemetry_out->setTemp(sensor, buffer);
-        log_d("Sensor snapshot to telemetry");
     }
+
+    log_i("Sensor snapshot to telemetry at %i", realtime.getEpoch());
 }
 
 float SensorCore::test(){

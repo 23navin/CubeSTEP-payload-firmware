@@ -71,6 +71,19 @@ esp_err_t deleteLog(FileCore *file_p) {
     return file_p->deleteFile("/log.csv");
 }
 
+esp_err_t resetLog(FileCore *file_p, Telemetry *tele_p){
+    esp_err_t err;
+
+    err = deleteLog(file_p);
+    if(err != ESP_OK){
+        return err;
+    }
+
+    err = createLog(file_p, tele_p);
+
+    return err;
+}
+
 /**
  * @brief Adds line to file
  * @note for testing
@@ -113,6 +126,7 @@ Telemetry active;
 
 TaskHandle_t exp_run_task = NULL;
 TaskHandle_t exp_log_task = NULL;
+TaskHandle_t exp_plog_task = NULL;
 
 /* Routines */
 
@@ -212,13 +226,15 @@ void exp_run(void *pvParameters){
  * @param pvParameters 
  */
 void exp_log(void *pvParameters){
-    (void)pvParameters;
+    uint32_t *interval = (uint32_t *) pvParameters;
+    const TickType_t xDelay = *interval / portTICK_PERIOD_MS;
+    log_i("Logger started: interval %ims", *interval);
 
     while(1){
         payload.logger_status = true;
         capture_telemetry_to_log(&storage, &sensor, &pwm);
         payload.logger_status = false;
-        vTaskDelay(payload.sample_interval / portTICK_PERIOD_MS);
+        vTaskDelay(xDelay);
     }
 }
 
@@ -383,10 +399,10 @@ void i2c_handler_start_experiment(uint32_t parameter){
     //check if experiment is already running
     if(payload.status == EXP_INACTIVE) {
         //start logging
-        xTaskCreatePinnedToCore(exp_log, "logger", 4096, NULL, 2, &exp_log_task, 1);
+        xTaskCreatePinnedToCore(exp_log, "logger", 4096, (void *) &payload.sample_interval, 3, &exp_log_task, 1);
 
         //start experiment
-        xTaskCreatePinnedToCore(exp_run, "experiment", 4096, NULL, 1, &exp_run_task, 1); //i2c on core 0
+        xTaskCreatePinnedToCore(exp_run, "experiment", 4096, NULL, 2, &exp_run_task, 1); //i2c on core 0
         
         slave.write_one_byte(VALID);
     }
@@ -416,11 +432,14 @@ void i2c_handler_stop_experiment(uint32_t parameter){
             //delete experiment task
             vTaskDelete(exp_run_task);
             payload.status = EXP_INACTIVE;
+            log_i("Experiment Halted");
 
             //delete logger task
             while(payload.logger_status == true){
+                log_d("..");
             }
             vTaskDelete(exp_log_task);
+            log_i("Experiment Log Halted");
 
             //turn off pwm
             pwm.pausePWM();
@@ -761,6 +780,31 @@ void i2c_handler_set_sampling_interval(uint32_t parameter){
 }
 
 /**
+ * @brief OpCode 0x9E
+ * @note Set the amount of time that the passivelog task
+ * will pass in between samples. A lower number means more
+ * frequent samples and a higher number means less frequent
+ * samples.
+ * 
+ * @param uint32_t Time (milli-seconds)
+ * 
+ * @return VALID if value was set
+ * @return INVALID if task is active and value was not set 
+ */
+void i2c_handler_set_passive_sampling_interval(uint32_t parameter){
+    //do not allow changing while task is active
+    if(!payload.passive_logger_status){
+        payload.sample_passive_interval = parameter;
+        log_i("Passive Sampling Interval set to %i ms", payload.sample_passive_interval);
+
+        slave.write_one_byte(VALID);
+    }
+    else{
+        slave.write_one_byte(INVALID);
+    }
+}
+
+/**
  * @brief OpCode 0x0F
  * @note Prepares experiment log file to be read by the
  * I2C system. This function must be called before get_log
@@ -831,6 +875,66 @@ void i2c_handler_reset_log(uint32_t parameter){
     }
 
     slave.write_one_byte(VALID);
+}
+
+/**
+ * @brief OpCode 0x3F
+ * @note functions related to passive logger task
+ * 
+ * @param 0x01 Start Task
+ * @param 0x02 Stop Task
+ * @param 0x03 Get Status of Task
+ * 
+ * @return VALID if ask started or stopped successfully
+ * @return INVALID if ask already started or stopped
+ * @return ACTIVE if task is active
+ * @return INACTIVE if task is not active
+ * @return UNKNOWN if undefined parameter
+ */
+void i2c_handler_passive_logger(uint32_t parameter){
+    if(parameter == 0x01) { //start logger
+        //check if passive logger is already running
+        if(payload.passive_logger_status == false) {
+            //start task
+            xTaskCreatePinnedToCore(exp_log, "plogger", 4096, (void *) &payload.sample_passive_interval, 1, &exp_plog_task, 1);
+            payload.passive_logger_status = true;
+            log_i("Passive Log Task started");
+
+            slave.write_one_byte(VALID);
+        }
+        else{
+            //passive logger is already running
+            slave.write_one_byte(INVALID);
+        }
+    }
+    else if(parameter == 0x02) { //stop logger
+        if(payload.passive_logger_status == true) {
+
+            vTaskDelete(exp_plog_task);
+            payload.passive_logger_status = false;
+            log_i("Passive Log Task Deleted");
+
+            slave.write_one_byte(VALID);
+        }
+        else{
+            //passive logger is not running
+            slave.write_one_byte(INVALID);
+        }
+    }
+    else if(parameter == 0x03) { //return status of logger
+        if(payload.passive_logger_status){
+            //task is active
+            slave.write_one_byte(VALID);
+        }
+        else{
+            //task is inactive
+            slave.write_one_byte(INVALID);
+        }
+    }
+    else { //Invalid Parameter
+        log_w("Invalid Parameter");
+        slave.write_one_byte(UNKNOWN);
+    }
 }
 
 /**
@@ -912,7 +1016,7 @@ void i2c_handler_get_temperature(uint32_t parameter){
  * 
  * @param _unused
  * 
- * @return int PWM duty (%) 
+ * @return int PWM duty (%)
  */
 void i2c_handler_get_pwm_duty(uint32_t parameter){
     slave.write_one_byte(pwm.getDutyCycle());
@@ -936,9 +1040,9 @@ void setup(){
     // PWM setup
     pwm.initPWM();
 
-    // SPI Flash log control
-    deleteLog(&storage);
-    createLog(&storage, &active);
+    // SPI Flash reset log
+    // deleteLog(&storage);
+    // createLog(&storage, &active);
 
     //define i2c handler call functions
     slave.install_i2c_handler_unused(i2c_handler_unused);
@@ -946,6 +1050,7 @@ void setup(){
     
     slave.install_i2c_handler(0x21, i2c_handler_restart_device);
     slave.install_i2c_handler(0x02, i2c_handler_sleep_device);
+    slave.install_i2c_handler(0x03);
     slave.install_i2c_handler(0x06, i2c_handler_get_experiment_status);
     slave.install_i2c_handler(0x08, i2c_handler_start_experiment);
     slave.install_i2c_handler(0x29, i2c_handler_stop_experiment);
@@ -966,12 +1071,13 @@ void setup(){
     slave.install_i2c_handler(0x9B, i2c_handler_set_pwm_period);
     slave.install_i2c_handler(0x1C, i2c_handler_reset_log);
     slave.install_i2c_handler(0x9D, i2c_handler_set_individual_length);
+    slave.install_i2c_handler(0x9E, i2c_handler_set_passive_sampling_interval);
+    slave.install_i2c_handler(0x3F, i2c_handler_passive_logger);
 
-    slave.ignore_opcode(0x03);
-    
     log_i("Setup completed.");
 
     xTaskCreatePinnedToCore(i2c_scan, "SCAN", 4096, NULL, tskIDLE_PRIORITY, NULL, 0); //i2c on core 0
+
 }
 
 void loop(){

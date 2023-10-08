@@ -27,9 +27,6 @@
 #define INVALID 0xFF
 #define UNKNOWN 0x44
 
-#define I2C_SLAVE_TX_BUF_LEN (2 * DATA_LENGTH)              /*!< I2C slave tx buffer size */
-#define I2C_SLAVE_RX_BUF_LEN (2 * DATA_LENGTH)              /*!< I2C slave rx buffer size */
-
 typedef uint8_t opcode_t;
 typedef uint32_t parameter_t;
 
@@ -65,10 +62,10 @@ public:
     inline uint64_t get_parameter(){
         return parameter;
     }
+    void install_i2c_handler(uint8_t opcode);
     void install_i2c_handler(uint8_t opcode, void (*i2c_handler_ptr)(uint32_t));
     void install_i2c_handler_unused(void (*i2c_handler_ptr)(uint32_t));
     void install_i2c_handler_ignore(void (*i2c_handler_ptr)(uint32_t));
-    void ignore_opcode(uint8_t opcode);
     void find_handler(uint8_t opcode, uint32_t parameter);
     void update();
 

@@ -19,7 +19,7 @@ using namespace std;
 //Char Length Definitions
 #define number_of_temp_sensors  16  // Number of temperatures sensors being read by adc
 
-#define cell_size_epoch         9   // Length of char* to hold each time value in .csv
+#define cell_size_epoch         11   // Length of char* to hold each time value in .csv
 #define cell_size_mSecond       4   // Length of char* to hold each time value in .csv
 #define cell_size_temp          8   // Length of char* to hold each temp value in .csv
 #define cell_size_pwm_duty      4

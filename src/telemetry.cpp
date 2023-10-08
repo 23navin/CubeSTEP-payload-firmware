@@ -65,12 +65,12 @@ void Telemetry::TimeToCSV(char *SecondsChar, char*uSecondsChar){
         strcpy(uSecondsChar, "XXX");
     }
     else {
-        int ret = snprintf(Buffer, cell_size_epoch, "%.8x", Seconds); // todo: add definitions
+        int ret = snprintf(Buffer, cell_size_epoch, "%.10i", Seconds); // todo: add definitions
         if(ret > 0){
             strcpy(SecondsChar, Buffer);
         }
 
-        ret = snprintf(uBuffer, cell_size_mSecond, "%.3x", mSeconds); // todo: add definitions
+        ret = snprintf(uBuffer, cell_size_mSecond, "%.3i", mSeconds); // todo: add definitions
         if(ret > 0){
             strcpy(uSecondsChar, uBuffer);
         }

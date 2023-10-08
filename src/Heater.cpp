@@ -165,7 +165,7 @@ void HeaterCore::setDutyCycle(int duty_cycle, float cycle_period){
 
 void HeaterCore::setDutyCycle(int duty_cycle){
     setDutyCycle(duty_cycle, getCyclePeriod());
-    log_i("PWM Duty Cycle set to %i", duty_cycle);
+    log_i("PWM Duty Cycle set to %i%", duty_cycle);
 }
 
 float HeaterCore::getCyclePeriod(){

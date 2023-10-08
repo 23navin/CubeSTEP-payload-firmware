@@ -10,12 +10,14 @@
 Experiment::Experiment(){
     status = false;
     logger_status = false;
+    passive_logger_status = false;
     pwm_duty = new uint8_t[STAGE_COUNT_MAX];
     length = new uint32_t[STAGE_COUNT_MAX];
 
     stage_count = 10;
     pwm_period = 12; //12 seconds default
-    sample_interval = min_to_ms(1); //1 minute default
+    sample_interval = sec_to_ms(3); //10 second default
+    sample_passive_interval = sec_to_ms(9); //1 minute default
     startup_length = min_to_ms(10); //10 minute default
     cooldown_length = min_to_ms(30); //30 minute default
     set_stage_length(min_to_ms(45)); //45 minute default

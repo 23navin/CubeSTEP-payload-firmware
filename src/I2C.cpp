@@ -193,7 +193,7 @@ bool I2cCore::check_for_message(){
 
     //if message is received but unprocessed
     if(bytes_read > 0) {
-        log_i("Message Received");
+        log_i("Message Received: %#02x", *operation);
         int paramater_size; //expected size of parameter argument in bytes
         parameter = 0; //reset parameter value
 
@@ -232,7 +232,14 @@ void I2cCore::install_i2c_handler(uint8_t opcode, void (*i2c_handler_ptr)(uint32
     opcode_list[opcode_counter] = opcode;
     handler_list[opcode_counter] = i2c_handler_ptr;
 
-    log_d("%#02x linked to %i", opcode_list[opcode_counter], handler_list[opcode_counter]);
+    log_d("%#02x installed with handler", opcode_list[opcode_counter], handler_list[opcode_counter]);
+}
+
+void I2cCore::install_i2c_handler(uint8_t opcode){
+    ++opcode_ignore_counter;
+    opcode_ignore_list[opcode_ignore_counter] = opcode;
+
+    log_d("%#02x installed without handler", opcode_ignore_list[opcode_ignore_counter]);
 }
 
 void I2cCore::install_i2c_handler_unused(void (*i2c_handler_ptr)(uint32_t)){
@@ -241,13 +248,6 @@ void I2cCore::install_i2c_handler_unused(void (*i2c_handler_ptr)(uint32_t)){
 
 void I2cCore::install_i2c_handler_ignore(void (*i2c_handler_ptr)(uint32_t)){
     handler_ignore = i2c_handler_ptr;
-}
-
-void I2cCore::ignore_opcode(uint8_t opcode){
-    ++opcode_ignore_counter;
-    opcode_ignore_list[opcode_ignore_counter] = opcode;
-
-    log_d("%#02x will be ignored", opcode_ignore_list[opcode_ignore_counter]);
 }
 
 void I2cCore::find_handler(uint8_t opcode, uint32_t parameter){
