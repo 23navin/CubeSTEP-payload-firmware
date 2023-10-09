@@ -6,6 +6,8 @@
 **/
 
 #include "File.h"
+static const char* TAG = "FileCore";
+
 
 FileCore::FileCore(){
     mount();
@@ -16,51 +18,51 @@ FileCore::~FileCore(){
 
 void FileCore::mount(){
     if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-        log_e("SPIFFS Mount Failed");
+        ESP_LOGE(TAG, "SPIFFS Mount Failed");
         return;
     }
 
-    log_i("SPIFFS Mount Successfull");
+    ESP_LOGI(TAG, "SPIFFS Mount Successfull");
     return;
 }
 
 void FileCore::listDir(const char * dirname, uint8_t levels){
-    log_d("Listing directory: %s\r", dirname);
+    ESP_LOGD(TAG, "Listing directory: %s\r", dirname);
 
     File root = SPIFFS.open(dirname);
     if(!root){
-        log_w("%s - failed to open directory", dirname);
+        ESP_LOGW(TAG, "%s - failed to open directory", dirname);
         return;
     }
     if(!root.isDirectory()){
-        log_w("%s - not a directory", dirname);
+        ESP_LOGW(TAG, "%s - not a directory", dirname);
         return;
     }
 
     File file = root.openNextFile();
     while(file){
         if(file.isDirectory()){
-            log_d("  DIR : %s", file.name());
+            ESP_LOGD(TAG, "  DIR : %s", file.name());
             if(levels){
                 listDir(file.path(), levels -1);
             }
         }else{
-            log_d("  FILE : %s\t SIZE: %i", file.name(), file.size());
+            ESP_LOGD(TAG, "  FILE : %s\t SIZE: %i", file.name(), file.size());
         }
         file = root.openNextFile();
     }
 }
 
 void FileCore::readFile(const char * path){
-    log_d("Reading file: %s\r", path);
+    ESP_LOGD(TAG, "Reading file: %s\r", path);
 
     File file = SPIFFS.open(path);
     if(!file || file.isDirectory()){
-        log_w("%s - failed to open file for reading", path);
+        ESP_LOGW(TAG, "%s - failed to open file for reading", path);
         return;
     }
 
-    log_d("- read from file: ");
+    ESP_LOGD(TAG, "- read from file: ");
     while(file.available()){
         Serial.write(file.read());
     }
@@ -68,11 +70,11 @@ void FileCore::readFile(const char * path){
 }
 
 std::vector<String> FileCore::loadFile(const char *path){
-    log_d("Reading file: %s\r", path);
+    ESP_LOGD(TAG, "Reading file: %s\r", path);
 
     File file = SPIFFS.open(path);
     if(!file || file.isDirectory()){
-        log_w("%s - failed to open file for reading", path);
+        ESP_LOGW(TAG, "%s - failed to open file for reading", path);
         //return;
     }
 
@@ -89,22 +91,22 @@ std::vector<String> FileCore::loadFile(const char *path){
 }
 
 void FileCore::select_file(const char *path){
-    log_i("Opening File for reading");
+    ESP_LOGI(TAG, "Opening File for reading");
     open_file = SPIFFS.open(path);
     if(!open_file || open_file.isDirectory()){
-        log_w("%s - failed to open file for reading", path);
+        ESP_LOGW(TAG, "%s - failed to open file for reading", path);
     }
     line = 0;
 }
 
 void FileCore::deselect_file(){
-    log_i("Closing file");
+    ESP_LOGI(TAG, "Closing file");
     open_file.close();
 }
 
 int FileCore::read_file(std::string *string_out){
     if(open_file.available()) {
-        log_d("Reading Line %i", line);
+        ESP_LOGD(TAG, "Reading Line %i", line);
         String buffer;
         buffer = open_file.readStringUntil('\n');
         *string_out = std::string(buffer.c_str());
@@ -117,7 +119,7 @@ int FileCore::read_file(std::string *string_out){
 }
 
 esp_err_t FileCore::writeFile(const char * path, const char * message){
-    log_d("Writing file: %s\r", path);
+    ESP_LOGD(TAG, "Writing file: %s\r", path);
 
     File file = SPIFFS.open(path, FILE_WRITE);
     if(!file){
@@ -125,53 +127,53 @@ esp_err_t FileCore::writeFile(const char * path, const char * message){
         return ESP_FAIL;
     }
     if(file.print(message)){
-        log_d("- file written");
+        ESP_LOGD(TAG, "- file written");
         return ESP_OK;
     } else {
-        log_w("- write failed");
+        ESP_LOGW(TAG, "- write failed");
         return ESP_FAIL;
     }
     file.close();
 }
 
 void FileCore::appendFile(const char * path, const char * message){
-    log_d("Appending to file: %s\r", path);
+    ESP_LOGV(TAG, "Appending to file: %s\r", path);
 
     File file = SPIFFS.open(path, FILE_APPEND);
     if(!file){
-        log_w("%s - failed to open file for appending", path);
+        ESP_LOGW(TAG, "%s - failed to open file for appending", path);
         return;
     }
     if(file.print(message)){
-        log_d("- message appended");
+        ESP_LOGV(TAG, "- message appended");
     } else {
-        log_w("- append failed");
+        ESP_LOGW(TAG, "- append failed");
     }
     file.close();
 }
 
 void FileCore::renameFile(const char * path1, const char * path2){
-    log_d("Renaming file %s to %s\r", path1, path2);
+    ESP_LOGD(TAG, "Renaming file %s to %s\r", path1, path2);
     if (SPIFFS.rename(path1, path2)){
-        log_d("- file %s renamed to %s", path1, path2);
+        ESP_LOGD(TAG, "- file %s renamed to %s", path1, path2);
     } else {
-        log_w("- %s rename failed", path1);
+        ESP_LOGW(TAG, "- %s rename failed", path1);
     }
 }
 
 esp_err_t FileCore::deleteFile(const char * path){
-    log_d("Deleting file: %s\r", path);
+    ESP_LOGD(TAG, "Deleting file: %s\r", path);
     if(SPIFFS.remove(path)){
-        log_d("- file %s deleted", path);
+        ESP_LOGV(TAG, "- file %s deleted", path);
         return ESP_OK;
     } else {
-        log_w("- %s delete failed", path);
+        ESP_LOGW(TAG, "- %s delete failed", path);
         return ESP_FAIL;
     }
 }
 
 uint32_t FileCore::testFileIO(const char * path){
-    log_d("Starting File test");
+    ESP_LOGI(TAG, "Starting File test");
     static uint8_t buf[512];
     size_t len = 0;
     File file = SPIFFS.open(path, FILE_WRITE);
@@ -180,7 +182,7 @@ uint32_t FileCore::testFileIO(const char * path){
     }
 
     size_t i;
-    log_d("- writing" );
+    ESP_LOGD(TAG, "- writing" );
     uint32_t start = millis();
     uint32_t end;
     for(i=0; i<2048; i++){
@@ -197,7 +199,7 @@ uint32_t FileCore::testFileIO(const char * path){
     if(file && !file.isDirectory()){
         len = file.size();
         size_t flen = len;
-        log_d("- reading" );
+        ESP_LOGD(TAG, "- reading" );
         while(len){
             size_t toRead = len;
             if(toRead > 512){

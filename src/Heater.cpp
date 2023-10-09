@@ -7,18 +7,19 @@
  */
 
 #include "Heater.h"
+static const char* TAG = "HeaterCore";
 
 bool IRAM_ATTR timer_isr_callback_cycle(void *args) {
     bool *pwm_signal = (bool *) args;
 
-    gpio_set_level(PWM_OUTPUT_PIN, HIGH);
+    gpio_set_level(PWM_OUTPUT_PIN, LEVEL_HIGH);
     timer_start(TIMER_GROUP, TIMER_ID_ON);
 
     return true; //unsure if something is missing here
 }
 
 bool IRAM_ATTR timer_isr_callback_duty(void *args) {
-    gpio_set_level(PWM_OUTPUT_PIN, LOW);
+    gpio_set_level(PWM_OUTPUT_PIN, LEVEL_LOW);
     timer_pause(TIMER_GROUP, TIMER_ID_ON);
 
     return true; //unsure if something is missing here
@@ -79,7 +80,7 @@ void HeaterCore::startPWM(){
 }
 
 void HeaterCore::resetPWM(){
-    log_d("PWM output reset");
+    ESP_LOGD(TAG, "PWM output reset");
     //pause timers
     if(statusTimer == true){
         pausePWM();
@@ -90,7 +91,7 @@ void HeaterCore::resetPWM(){
     timer_set_counter_value(TIMER_GROUP, TIMER_ID_ON, 0);
 
     //manually turn off gpio output
-    gpio_set_level(PWM_OUTPUT_PIN, LOW);
+    gpio_set_level(PWM_OUTPUT_PIN, LEVEL_LOW);
 }
 
 void HeaterCore::pausePWM(){
@@ -98,10 +99,10 @@ void HeaterCore::pausePWM(){
     timer_pause(TIMER_GROUP, TIMER_ID_MAIN);
     timer_pause(TIMER_GROUP, TIMER_ID_ON);
     statusTimer = false;
-    log_i("PWM output: off");
+    ESP_LOGI(TAG, "PWM output: off");
 
     //turn off pwm output
-    gpio_set_level(PWM_OUTPUT_PIN, LOW);
+    gpio_set_level(PWM_OUTPUT_PIN, LEVEL_LOW);
 
 }
 
@@ -109,7 +110,7 @@ void HeaterCore::resumePWM(){
     //if 100% duty cycle, turn output on without using pwm timers\
     fixes bug where 100% would cause output to toggle when pwm finished a cycle
     if(dutyPeriod == cyclePeriod){
-        gpio_set_level(PWM_OUTPUT_PIN, HIGH);
+        gpio_set_level(PWM_OUTPUT_PIN, LEVEL_HIGH);
     }
     else{
         //start timers
@@ -117,10 +118,10 @@ void HeaterCore::resumePWM(){
         timer_start(TIMER_GROUP, TIMER_ID_ON);
 
         //turn pwm output to high at beginning of cycle
-        gpio_set_level(PWM_OUTPUT_PIN, HIGH);
+        gpio_set_level(PWM_OUTPUT_PIN, LEVEL_HIGH);
     }
     statusTimer = true;
-    log_i("PWM output: on");
+    ESP_LOGI(TAG, "PWM output: on");
 }
 
 void HeaterCore::setPWM(float cycle_period, float duty_period){
@@ -139,9 +140,9 @@ void HeaterCore::setPWM(float cycle_period, float duty_period){
     //set PWM cycle and duty periods
     cyclePeriod = cycle_period;
     dutyPeriod = duty_period;
-    log_i("PWM timers changed");
-    log_d("PWM Cycle Period set to %.2f seconds", cycle_period);
-    log_d("PWM Duty Period set to %.2f seconds", duty_period);
+    ESP_LOGI(TAG, "PWM timers changed");
+    ESP_LOGD(TAG, "PWM Cycle Period set to %.2f seconds", cycle_period);
+    ESP_LOGD(TAG, "PWM Duty Period set to %.2f seconds", duty_period);
 
     timer_set_alarm_value(TIMER_GROUP, TIMER_ID_MAIN, cyclePeriod*TIMER_SCALE);
     timer_set_alarm_value(TIMER_GROUP, TIMER_ID_ON, dutyPeriod*TIMER_SCALE);
@@ -165,7 +166,7 @@ void HeaterCore::setDutyCycle(int duty_cycle, float cycle_period){
 
 void HeaterCore::setDutyCycle(int duty_cycle){
     setDutyCycle(duty_cycle, getCyclePeriod());
-    log_i("PWM Duty Cycle set to %i%", duty_cycle);
+    ESP_LOGI(TAG, "PWM Duty Cycle set to %i%", duty_cycle);
 }
 
 float HeaterCore::getCyclePeriod(){

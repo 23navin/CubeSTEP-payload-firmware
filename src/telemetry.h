@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <cstring>
 #include <random> //for testing
-#include "ESP32Time.h"
 
 using namespace std;
 
@@ -20,7 +19,7 @@ using namespace std;
 #define number_of_temp_sensors  16  // Number of temperatures sensors being read by adc
 
 #define cell_size_epoch         11   // Length of char* to hold each time value in .csv
-#define cell_size_mSecond       4   // Length of char* to hold each time value in .csv
+#define cell_size_mSecond       7   // Length of char* to hold each time value in .csv
 #define cell_size_temp          8   // Length of char* to hold each temp value in .csv
 #define cell_size_pwm_duty      4
 #define cell_size_pwm_period    5
@@ -42,15 +41,12 @@ using namespace std;
 struct Telemetry{
     /* member declarations */
     unsigned long Seconds; // time: Seconds portion
-    unsigned int mSeconds; // time: micro-Seconds portion
+    unsigned long uSeconds; // time: micro-Seconds portion
     float Sens[number_of_temp_sensors]; // temperature array
     int pwm_Duty; // pwm duty cycle (percentage)
     float pwm_Period; // pwm period length
-    // float PWM[number_of_pwm_outs]; // pwm array; todo: change to duty cycle
 
-    ESP32Time realtime; //for testing
-
-    /* methods*/
+    /* methods */
 
     /**
      * @brief Construct a new Telemetry object
@@ -125,13 +121,6 @@ struct Telemetry{
     void clear();
 
     /**
-     * @brief Sets all member variables to a random value (deprecated, do not use)
-     * @note Uses rand()
-     * 
-     */
-    void random(ESP32Time *realtime);
-
-    /**
      * @brief Set a single temperature
      * 
      * @param sensor
@@ -156,15 +145,10 @@ struct Telemetry{
      * @brief Set time to parameter
      * 
      * @param epoch seconds
-     * @param milli milliseconds
+     * @param micro micro-seconds
      */
-    void setTime(unsigned long epoch, unsigned int milli);
+    void setTime(unsigned long epoch, unsigned long micro);
 
     void setPWM(int duty_percentage, float cycle_period);
-
-
-    //void import(String inputString);
-
-    //void import(char *inputArray);
 };
 #endif // _telemetry_H_included

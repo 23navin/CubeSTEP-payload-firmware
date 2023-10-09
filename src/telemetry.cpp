@@ -7,6 +7,7 @@
 
 #include "Telemetry.h"
 
+
 unsigned long epoch(){ //get time for srand seed
     time_t now;
     time(&now);
@@ -70,7 +71,7 @@ void Telemetry::TimeToCSV(char *SecondsChar, char*uSecondsChar){
             strcpy(SecondsChar, Buffer);
         }
 
-        ret = snprintf(uBuffer, cell_size_mSecond, "%.3i", mSeconds); // todo: add definitions
+        ret = snprintf(uBuffer, cell_size_mSecond, "%.6i", uSeconds); // todo: add definitions
         if(ret > 0){
             strcpy(uSecondsChar, uBuffer);
         }
@@ -176,7 +177,7 @@ void Telemetry::headerCSV(char *LineChar){
     char LineBuffer[1000];
 
     //time
-    strcpy(LineBuffer, "sys_Time(S),sys_Time(mS)");
+    strcpy(LineBuffer, "sys_Time(S),sys_Time(uS)");
     
     //pwm
     strcat(LineBuffer, ",pwm_Duty(%),pwm_Period(S)");
@@ -195,31 +196,13 @@ void Telemetry::headerCSV(char *LineChar){
 
 void Telemetry::clear(){
     Seconds = 0;
-    mSeconds = 0;
+    uSeconds = 0;
 
     pwm_Duty = 0;
     pwm_Period = 0;
 
     for(int i = 0; i < number_of_temp_sensors; i++){
         Sens[i] = 0.0;
-    }
-}
-
-//do not use
-void Telemetry::random(ESP32Time *realtime){
-    delay(rand() % 5000);
-
-    //time
-    Seconds = realtime->getEpoch();
-    mSeconds = realtime->getMillis();
-
-    //pwm
-    pwm_Duty = rand() % 101 + 1;
-    pwm_Period = 12;
-
-    //temp
-    for(int i=0; i < number_of_temp_sensors; i++){
-        Sens[i] = 1.0 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(500.0-1.0)));
     }
 }
 
@@ -235,13 +218,16 @@ void Telemetry::setTemp(float *temp_array[]){
 }
 
 void Telemetry::setTime(){
-    Seconds = realtime.getEpoch();
-    mSeconds = realtime.getMillis();
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    Seconds = tv.tv_sec;
+    uSeconds = tv.tv_usec;
 }
 
-void Telemetry::setTime(unsigned long epoch, unsigned int milli){
+void Telemetry::setTime(unsigned long epoch, unsigned long micro){
     Seconds = epoch;
-    mSeconds = milli;
+    uSeconds = micro;
 }
 
 void Telemetry::setPWM(int duty_percentage, float cycle_period){

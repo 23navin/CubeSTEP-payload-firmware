@@ -9,9 +9,11 @@
 #ifndef _heater_H_included
 #define _heater_H_included
 
+#include "esp_log.h"
+#include "esp_err.h"
+
 #include "driver/timer.h"
 #include "driver/gpio.h"
-#include "ESP32Time.h"
 
 #include "Telemetry.h"
 
@@ -26,8 +28,12 @@
 #define PWM_OUTPUT_PIN          GPIO_NUM_5 // GPIO pin used for PWM output
 #define GPIO_OUTPUT_PIN_SEL     (1ULL<<PWM_OUTPUT_PIN)
 
-// Parameter Checls
+// Parameter Checks
 #define PWM_PERIOD_MIN          (0.1)
+
+//GPIO Levels
+#define LEVEL_HIGH                    0x1
+#define LEVEL_LOW                     0x0
 
 /**
  * @brief Interface to control PWM output for battery heaters

@@ -6,6 +6,7 @@
 **/
 
 #include "Sensor.h"
+static const char* TAG = "SensorCore";
 
 SensorCore::SensorCore(){
     //Set up ADC units
@@ -17,15 +18,8 @@ SensorCore::SensorCore(){
 }
 
 SensorCore::~SensorCore(){
-    log_i("POWER ADC OFF");
+    ESP_LOGI(TAG, "POWER ADC OFF");
     // adc_power_release();
-}
-
-void SensorCore::init(ESP32Time *time){
-    //get and set current time
-    unsigned long epoch = time->getEpoch();
-    unsigned int ms = time->getMillis();
-    realtime.setTime(epoch, ms);
 }
 
 void SensorCore::readADC1(int *value_out, adc1_channel_t channel){
@@ -34,7 +28,7 @@ void SensorCore::readADC1(int *value_out, adc1_channel_t channel){
     //read ADC
     adc1_get_raw(channel); //ignore first reading
     buffer = adc1_get_raw(channel);
-    log_v("ADC1(%i) read at %i", channel, buffer);
+    ESP_LOGV(TAG, "ADC1(%i) read at %i", channel, buffer);
 
     //write to provided int var
     *value_out = buffer;
@@ -46,7 +40,7 @@ void SensorCore::readADC2(int *value_out, adc2_channel_t channel){
     //read ADC
     adc2_get_raw(channel, ADC_WIDTH_BIT_12, &ignore); //ignore first reading
     adc2_get_raw(channel, ADC_WIDTH_BIT_12, &buffer);
-    log_v("ADC2(%i) read at %i", channel, buffer);
+    ESP_LOGV(TAG, "ADC2(%i) read at %i", channel, buffer);
 
     //write to provided int var
     *value_out = buffer;
@@ -86,7 +80,7 @@ float SensorCore::sample(int sensor){
     //Convert voltage to temperature (K) usin thermistor characteristics
     resistance = ((THERMISTORNOMINAL*SUPPLYVOLTAGE)/voltage)-THERMISTORNOMINAL;
     temperature = (BCOEFFICIENT/log(resistance/r_inf))-KELVIN;
-    log_d("Sensor %i sampled at %f", sensor, temperature);
+    ESP_LOGI(TAG, "Sensor %i sampled at %f", sensor, temperature);
 
     //debug to uart
     // char debug[128];
@@ -103,9 +97,10 @@ void SensorCore::snapshot(Telemetry *telemetry_out){
     // Serial.println(header);
 
     //Current time -> telemetry object
-    unsigned long second = realtime.getEpoch();
-    unsigned int milli = realtime.getMillis();
-    telemetry_out->setTime(second, realtime.getMillis());
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    telemetry_out->setTime(tv.tv_sec, tv.tv_usec);
 
     //Read temperatues -> telemetry object
     for(int sensor = 0; sensor < number_of_temp_sensors; sensor++){
@@ -116,7 +111,7 @@ void SensorCore::snapshot(Telemetry *telemetry_out){
         telemetry_out->setTemp(sensor, buffer);
     }
 
-    log_i("Sensor snapshot to telemetry at %i", realtime.getEpoch());
+    ESP_LOGI(TAG, "Sensor snapshot to telemetry at %i", telemetry_out->Seconds);
 }
 
 float SensorCore::test(){
@@ -124,12 +119,12 @@ float SensorCore::test(){
 
     for(int sensor = 0; sensor < number_of_temp_sensors; sensor++){
         float buffer = sample(sensor);
-        log_v("Sensor %i @ %f", sensor, buffer);
+        ESP_LOGV(TAG, "Sensor %i @ %f", sensor, buffer);
         average += buffer;
     }
 
     average /= number_of_temp_sensors;
-    log_d("SensorCore tested. Average temperature: %f", average);
+    ESP_LOGD(TAG, "SensorCore tested. Average temperature: %f", average);
 
     return average;
 }

@@ -7,7 +7,6 @@
 */
 
 using namespace std;
-#include "ESP32Time.h"
 #include "esp_log.h"
 #include "esp_err.h"
 #include <freertos/FreeRTOS.h>
@@ -22,7 +21,9 @@ using namespace std;
 #include "Experiment.h"
 
 //Logging
-#define TAGI "payload_INFO"
+#define TAG "system"
+#define TAG_i2c "i2c_handle"
+#define TAG_task "task"
 
 //UART
 #define UART_BAUD_RATE 115200 //default baud rate
@@ -33,9 +34,8 @@ using namespace std;
  * @brief Sets a time object to the system time when this build was compiled
  * @note Useful as a baseline time variable
  * 
- * @param object ESP32Time pointer
  */
-void setTimeToCompile(ESP32Time *object)
+void setTimeToCompile()
 {
     char s_month[5];
     int year;
@@ -46,7 +46,15 @@ void setTimeToCompile(ESP32Time *object)
     t.tm_mon = (strstr(month_names, s_month) - month_names) / 3;    
     t.tm_year = year - 1900;   
 
-    object->setTime(mktime(&t));
+    uint32_t epoch = mktime(&t);
+    struct timeval tv;
+    if (epoch > 2082758399){
+        tv.tv_sec = epoch - 2082758399;  // epoch time (seconds)
+    } else {
+        tv.tv_sec = epoch;  // epoch time (seconds)
+    }
+    tv.tv_usec = 0;    // microseconds
+    settimeofday(&tv, NULL);
 }
 
 /**
@@ -104,16 +112,17 @@ void addLine(FileCore *file_p, Telemetry *tele){
  * @param sens_p 
  * @param pwm_p 
  */
-void capture_telemetry_to_log(FileCore *file_p, SensorCore *sens_p, HeaterCore *pwm_p){
+void log_capture(FileCore *file_p, SensorCore *sens_p, HeaterCore *pwm_p){
     Telemetry capture;
     sens_p->snapshot(&capture);
     pwm_p->snapshot(&capture);
     addLine(file_p, &capture);
+    ESP_LOGI(TAG, "Telemetry recorded at %i/%i", capture.Seconds, capture.uSeconds);
+
 }
 
 /* Objects */
 
-ESP32Time rtc; //realtime (need to find non-Arduino alternate for esp-idf swap)
 FileCore storage;
 SensorCore sensor;
 HeaterCore pwm;
@@ -163,14 +172,14 @@ void exp_run(void *pvParameters){
         }
 
         //indicate that experiment is active
-        log_i("Experiment Starting");
+        ESP_LOGI(TAG_task, "Experiment Starting");
         payload.status = EXP_STARTUP;
 
         //reset current stage counter
         payload.current_stage = 0;
 
         //log baseline
-        log_i("Logging Baseline (%i ms)", payload.startup_length);
+        ESP_LOGI(TAG_task, "Logging Baseline (%i ms)", payload.startup_length);
         vTaskDelay(payload.startup_length / portTICK_PERIOD_MS);
 
         //reset pwm out
@@ -189,7 +198,7 @@ void exp_run(void *pvParameters){
             }
 
             //set pwm to stage pwm param
-            log_i("Advancing to Stage %i (%i ms)", payload.current_stage, payload.length[payload.current_stage]);
+            ESP_LOGI(TAG_task, "Advancing to Stage %i (%i ms)", payload.current_stage, payload.length[payload.current_stage]);
             pwm.setDutyCycle(payload.pwm_duty[payload.current_stage]);
 
             //wait stage length
@@ -204,8 +213,8 @@ void exp_run(void *pvParameters){
         payload.status = EXP_COOLDOWN;
 
         //post-experiment log
-        log_i("Logging cooldown (%i ms)", payload.cooldown_length);
-        vTaskDelay(payload.cooldown_length);
+        ESP_LOGI(TAG_task, "Logging cooldown (%i ms)", payload.cooldown_length);
+        vTaskDelay(payload.cooldown_length / portTICK_PERIOD_MS);
 
         //turn logger off
         while(payload.logger_status == true){
@@ -213,7 +222,7 @@ void exp_run(void *pvParameters){
         vTaskDelete(exp_log_task);
 
         //exit task
-        log_i("Experiment Completed");
+        ESP_LOGI(TAG_task, "Experiment Completed");
         payload.status = EXP_INACTIVE;
         vTaskDelete(NULL);
     }
@@ -228,11 +237,11 @@ void exp_run(void *pvParameters){
 void exp_log(void *pvParameters){
     uint32_t *interval = (uint32_t *) pvParameters;
     const TickType_t xDelay = *interval / portTICK_PERIOD_MS;
-    log_i("Logger started: interval %ims", *interval);
+    ESP_LOGI(TAG_task, "Logger started: interval %ims", *interval);
 
     while(1){
         payload.logger_status = true;
-        capture_telemetry_to_log(&storage, &sensor, &pwm);
+        log_capture(&storage, &sensor, &pwm);
         payload.logger_status = false;
         vTaskDelay(xDelay);
     }
@@ -246,8 +255,8 @@ void exp_log(void *pvParameters){
  * 
  * @return nothing
  */
-void i2c_handler_unused(uint32_t parameter){
-    log_w("Undefined Opcode");
+void i2c_unused(uint32_t parameter){
+    ESP_LOGW(TAG_i2c, "Undefined Opcode");
 }
 
 /**
@@ -255,8 +264,8 @@ void i2c_handler_unused(uint32_t parameter){
  * 
  * @return nothing
  */
-void i2c_handler_ignore(uint32_t parameter){
-    log_i("OpCode Ignored");
+void i2c_ignore(uint32_t parameter){
+    ESP_LOGI(TAG_i2c, "OpCode Ignored");
 }
 
 /**
@@ -272,19 +281,19 @@ void i2c_handler_ignore(uint32_t parameter){
  * @return VALID upon successful reset;
  * @return UNKNOWN if undefined parameter
  */
-void i2c_handler_restart_device(uint32_t parameter){
+void i2c_restart_device(uint32_t parameter){
     if(parameter == 0x49) { //Restart I2C
-        log_i("Restarting I2C");
+        ESP_LOGI(TAG_i2c, "Restarting I2C");
         slave.reset();
 
         slave.write_one_byte(VALID);
     }
     else if(parameter == 0x05) { //Restart Device
-        log_i("Restarting Device");
+        ESP_LOGI(TAG_i2c, "Restarting Device");
         esp_restart();
     }
     else {
-        log_w("Invalid Parameter");
+        ESP_LOGW(TAG_i2c, "Invalid Parameter");
         slave.write_one_byte(UNKNOWN);
     }
 }
@@ -299,7 +308,7 @@ void i2c_handler_restart_device(uint32_t parameter){
  * 
  * @return VALID upon wake
  */
-void i2c_handler_wake_device(uint32_t parameter);
+void i2c_wake_device(uint32_t parameter);
 
 /**
  * @brief OpCode 0x02
@@ -314,7 +323,7 @@ void i2c_handler_wake_device(uint32_t parameter);
  * 
  * @return VALID before sleep
  */
-void i2c_handler_sleep_device(uint32_t parameter){
+void i2c_sleep_device(uint32_t parameter){
     //set up sleep mode
     gpio_wakeup_enable(I2C_SCL_PIN, GPIO_INTR_LOW_LEVEL);
     esp_sleep_enable_gpio_wakeup();
@@ -325,19 +334,19 @@ void i2c_handler_sleep_device(uint32_t parameter){
     slave.write_one_byte(VALID);
 
     //put device to sleep
-    log_i("going to sleep...");
+    ESP_LOGI(TAG_i2c, "going to sleep...");
     vTaskDelay(10 / portTICK_PERIOD_MS);
     esp_light_sleep_start();
 
     //device will wake when the i2c bus is used. OpCode\
     0x03 (Wake Device)'s should be used to wake the device\
     so it's i2c handler is run immediately upon waking.
-    i2c_handler_wake_device(VALID);
+    i2c_wake_device(VALID);
 }
 
 //declared earlier so that it can be used by 0x02
-void i2c_handler_wake_device(uint32_t parameter){
-    log_i("waking up...");
+void i2c_wake_device(uint32_t parameter){
+    ESP_LOGI(TAG_i2c, "waking up...");
     slave.write_one_byte(DEVICE_ADDR);
 }
 
@@ -349,7 +358,7 @@ void i2c_handler_wake_device(uint32_t parameter){
  * 
  * @return
  */
-void i2c_handler_run_system_check(uint32_t parameter){
+void i2c_run_system_check(uint32_t parameter){
 
 }
 
@@ -370,7 +379,7 @@ void i2c_handler_run_system_check(uint32_t parameter){
  * @return 0x03 Inactive;
  * @return UNKNWON if parameter is undefined
  */
-void i2c_handler_get_system_check_result(uint32_t parameter){
+void i2c_get_system_check_result(uint32_t parameter){
     //see onenotes of implementation suggestion
 }
 
@@ -382,7 +391,7 @@ void i2c_handler_get_system_check_result(uint32_t parameter){
  * 
  * @return Time (milli-seconds) till experiment will complete
  */
-void i2c_handler_get_time_left_in_experiment(uint32_t parameter){
+void i2c_get_time_left_in_experiment(uint32_t parameter){
     //
 }
 
@@ -395,7 +404,7 @@ void i2c_handler_get_time_left_in_experiment(uint32_t parameter){
  * @return VALID if experiment has been started;
  * @return INVALID if experiment was already active
  */
-void i2c_handler_start_experiment(uint32_t parameter){
+void i2c_start_experiment(uint32_t parameter){
     //check if experiment is already running
     if(payload.status == EXP_INACTIVE) {
         //start logging
@@ -423,23 +432,23 @@ void i2c_handler_start_experiment(uint32_t parameter){
  * @return INVALID if experiment was not active;
  * @return UNKNOWN if undefined parameter
  */
-void i2c_handler_stop_experiment(uint32_t parameter){
+void i2c_stop_experiment(uint32_t parameter){
     if(parameter == 0x84){
         //Delete experiment task if it has been created
         if(payload.status){
-            log_d("Stopping Experiment");
+            ESP_LOGD(TAG_i2c, "Stopping Experiment");
 
             //delete experiment task
             vTaskDelete(exp_run_task);
             payload.status = EXP_INACTIVE;
-            log_i("Experiment Halted");
+            ESP_LOGI(TAG_i2c, "Experiment Halted");
 
             //delete logger task
             while(payload.logger_status == true){
-                log_d("..");
+                ESP_LOGD(TAG_i2c, "..");
             }
             vTaskDelete(exp_log_task);
-            log_i("Experiment Log Halted");
+            ESP_LOGI(TAG_i2c, "Experiment Log Halted");
 
             //turn off pwm
             pwm.pausePWM();
@@ -455,7 +464,7 @@ void i2c_handler_stop_experiment(uint32_t parameter){
     else if(parameter == 0x33){
         //check if experiment is active
         if(payload.status){
-            log_d("Raising experiment stop flag");
+            ESP_LOGD(TAG_i2c, "Raising experiment stop flag");
             //prompt experiment to end after current stage
             payload.stop_flag = true;
 
@@ -467,7 +476,7 @@ void i2c_handler_stop_experiment(uint32_t parameter){
         }
     }
     else { //Invalid Parameter
-        log_w("Invalid Parameter");
+        ESP_LOGW(TAG_i2c, "Invalid Parameter");
         slave.write_one_byte(UNKNOWN);
     }
 }
@@ -481,7 +490,7 @@ void i2c_handler_stop_experiment(uint32_t parameter){
  * @return VALID if experiment is active;
  * @return INVALID if experiment is inactive
  */
-void i2c_handler_get_experiment_status(uint32_t parameter){
+void i2c_get_experiment_status(uint32_t parameter){
     if(payload.status){
         //xperiment is active
         slave.write_one_byte(VALID);
@@ -501,7 +510,7 @@ void i2c_handler_get_experiment_status(uint32_t parameter){
  * @return Integer number of stage;
  * @return INVALID if experiment is not active
  */
-void i2c_handler_get_current_stage(uint32_t parameter){
+void i2c_get_current_stage(uint32_t parameter){
     if(payload.status == EXP_ACTIVE){
         slave.write_one_byte(payload.current_stage);
     }
@@ -529,13 +538,13 @@ void i2c_handler_get_current_stage(uint32_t parameter){
  * @return VALID if value was set;
  * @return INVALID if experiment was active and value was not set
  */
-void i2c_handler_set_number_of_stages(uint32_t parameter){
+void i2c_set_number_of_stages(uint32_t parameter){
     if(!payload.status){
         payload.set_stage_count(parameter);
-        log_i("Exp Stage Count set to %i", payload.stage_count);
+        ESP_LOGI(TAG_i2c, "Exp Stage Count set to %i", payload.stage_count);
 
         payload.generate_pwm_duty_array();
-        log_i("Exp PWM progression generated");
+        ESP_LOGI(TAG_i2c, "Exp PWM progression generated");
 
         slave.write_one_byte(VALID);
     }
@@ -555,11 +564,11 @@ void i2c_handler_set_number_of_stages(uint32_t parameter){
  * @return VALID if value was set;
  * @return INVALID if experiment was active and value was not set
  */
-void i2c_handler_set_stage_length(uint32_t parameter){
+void i2c_set_stage_length(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         payload.set_stage_length(parameter);
-        log_i("Exp All Stage Lengths set to %i ms", payload.length[0]);
+        ESP_LOGI(TAG_i2c, "Exp All Stage Lengths set to %i ms", payload.length[0]);
 
         slave.write_one_byte(VALID);
     }
@@ -578,14 +587,14 @@ void i2c_handler_set_stage_length(uint32_t parameter){
  * 
  * @return  
  */
-void i2c_handler_set_individual_length(uint32_t parameter){
+void i2c_set_individual_length(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         //parse parameter
         uint8_t stage = (parameter >> 24) & 0xFF;
         uint32_t length = parameter & 0xFFFFFF;
 
-        log_w("stage: %i, length %i", stage, length);
+        ESP_LOGW(TAG_i2c, "stage: %i, length %i", stage, length);
 
         //check values
         if(stage >= payload.stage_count){
@@ -594,7 +603,7 @@ void i2c_handler_set_individual_length(uint32_t parameter){
         else{
             //set value
             payload.length[stage] = length;
-            log_i("Exp PWM at Stage #%i set to %i%", stage, payload.length[stage]);
+            ESP_LOGI(TAG_i2c, "Exp PWM at Stage #%i set to %i%", stage, payload.length[stage]);
 
             slave.write_one_byte(VALID);
         }
@@ -616,11 +625,11 @@ void i2c_handler_set_individual_length(uint32_t parameter){
  * @return VALID if value was set;
  * @return INVALID if experiment was active and value was not set 
  */
-void i2c_handler_set_startup_length(uint32_t parameter){
+void i2c_set_startup_length(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         payload.startup_length = parameter;
-        log_i("Exp Startup Length set to %i ms", payload.startup_length);
+        ESP_LOGI(TAG_i2c, "Exp Startup Length set to %i ms", payload.startup_length);
 
         slave.write_one_byte(VALID);
     }
@@ -641,11 +650,11 @@ void i2c_handler_set_startup_length(uint32_t parameter){
  * @return VALID if value was set;
  * @return INVALID if experimnent was active and value was not set
  */
-void i2c_handler_set_cooldown_length(uint32_t parameter){
+void i2c_set_cooldown_length(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         payload.cooldown_length = parameter;
-        log_i("Exp Cooldown Length set to %i ms", payload.cooldown_length);
+        ESP_LOGI(TAG_i2c, "Exp Cooldown Length set to %i ms", payload.cooldown_length);
 
         slave.write_one_byte(VALID);
     }
@@ -663,7 +672,7 @@ void i2c_handler_set_cooldown_length(uint32_t parameter){
  * 
  * @return  
  */
-void i2c_handler_set_individual_pwm(uint32_t parameter){
+void i2c_set_individual_pwm(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         //parse parameter
@@ -680,7 +689,7 @@ void i2c_handler_set_individual_pwm(uint32_t parameter){
         else{
             //set value
             payload.length[stage] = pwm;
-            log_i("Exp PWM at Stage #%i set to %i%", stage, payload.length[stage]);
+            ESP_LOGI(TAG_i2c, "Exp PWM at Stage #%i set to %i%", stage, payload.length[stage]);
 
             slave.write_one_byte(VALID);
         }
@@ -702,7 +711,7 @@ void i2c_handler_set_individual_pwm(uint32_t parameter){
  * @return VALID if value was set
  * @return INVALID if experiment was active and value was not set 
  */
-void i2c_handler_set_pwm_period(uint32_t parameter){
+void i2c_set_pwm_period(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         //convert raw hex to float
@@ -717,7 +726,7 @@ void i2c_handler_set_pwm_period(uint32_t parameter){
         }
         else{
             payload.pwm_period = float_to_uint.float_data;
-            log_i("Exp PWM Period set to %f s", payload.pwm_period);
+            ESP_LOGI(TAG_i2c, "Exp PWM Period set to %f s", payload.pwm_period);
 
             slave.write_one_byte(VALID);
         }
@@ -736,7 +745,7 @@ void i2c_handler_set_pwm_period(uint32_t parameter){
  * 
  * @return VALID upon setting value
  */
-void i2c_handler_set_max_temperature(uint32_t parameter){
+void i2c_set_max_temperature(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         //convert raw hex to float
@@ -746,7 +755,7 @@ void i2c_handler_set_max_temperature(uint32_t parameter){
         } float_to_uint = { .uint_data = parameter };
 
         payload.max_temperature = float_to_uint.float_data;
-        log_i("Exp Max Temperature set to %f s", payload.max_temperature);
+        ESP_LOGI(TAG_i2c, "Exp Max Temperature set to %f s", payload.max_temperature);
 
         slave.write_one_byte(VALID);
     }
@@ -766,11 +775,11 @@ void i2c_handler_set_max_temperature(uint32_t parameter){
  * @return VALID if value was set
  * @return INVALID if experiment was active and value was not set 
  */
-void i2c_handler_set_sampling_interval(uint32_t parameter){
+void i2c_set_sampling_interval(uint32_t parameter){
     //do not allow changing while experiment is active
     if(!payload.status){
         payload.sample_interval = parameter;
-        log_i("Exp Sampling Interval set to %i ms", payload.sample_interval);
+        ESP_LOGI(TAG_i2c, "Exp Sampling Interval set to %i ms", payload.sample_interval);
 
         slave.write_one_byte(VALID);
     }
@@ -791,11 +800,11 @@ void i2c_handler_set_sampling_interval(uint32_t parameter){
  * @return VALID if value was set
  * @return INVALID if task is active and value was not set 
  */
-void i2c_handler_set_passive_sampling_interval(uint32_t parameter){
+void i2c_set_passive_sampling_interval(uint32_t parameter){
     //do not allow changing while task is active
     if(!payload.passive_logger_status){
         payload.sample_passive_interval = parameter;
-        log_i("Passive Sampling Interval set to %i ms", payload.sample_passive_interval);
+        ESP_LOGI(TAG_i2c, "Passive Sampling Interval set to %i ms", payload.sample_passive_interval);
 
         slave.write_one_byte(VALID);
     }
@@ -813,7 +822,7 @@ void i2c_handler_set_passive_sampling_interval(uint32_t parameter){
  * 
  * @return VALID when log is ready to be read :)
  */
-void i2c_handler_prepare_log(uint32_t parameter){
+void i2c_prepare_log(uint32_t parameter){
     // log_buffer = storage.loadFile("/log.csv");
     // slave.write_one_byte(log_buffer.size());
 
@@ -834,7 +843,7 @@ void i2c_handler_prepare_log(uint32_t parameter){
  * @return string containing one line of log data
  * @return INVALID if there is no log data to return
  */
-void i2c_handler_get_log(uint32_t parameter){
+void i2c_get_log(uint32_t parameter){
     string buffer;
     int line;
 
@@ -859,7 +868,7 @@ void i2c_handler_get_log(uint32_t parameter){
  * @return VALID upon log reset 
  * @return INVALID if SPI error
  */
-void i2c_handler_reset_log(uint32_t parameter){
+void i2c_reset_log(uint32_t parameter){
     esp_err_t err;
 
     err = deleteLog(&storage);
@@ -891,14 +900,14 @@ void i2c_handler_reset_log(uint32_t parameter){
  * @return INACTIVE if task is not active
  * @return UNKNOWN if undefined parameter
  */
-void i2c_handler_passive_logger(uint32_t parameter){
+void i2c_passive_logger(uint32_t parameter){
     if(parameter == 0x01) { //start logger
         //check if passive logger is already running
         if(payload.passive_logger_status == false) {
             //start task
             xTaskCreatePinnedToCore(exp_log, "plogger", 4096, (void *) &payload.sample_passive_interval, 1, &exp_plog_task, 1);
             payload.passive_logger_status = true;
-            log_i("Passive Log Task started");
+            ESP_LOGI(TAG_i2c, "Passive Log Task started");
 
             slave.write_one_byte(VALID);
         }
@@ -912,7 +921,7 @@ void i2c_handler_passive_logger(uint32_t parameter){
 
             vTaskDelete(exp_plog_task);
             payload.passive_logger_status = false;
-            log_i("Passive Log Task Deleted");
+            ESP_LOGI(TAG_i2c, "Passive Log Task Deleted");
 
             slave.write_one_byte(VALID);
         }
@@ -932,7 +941,7 @@ void i2c_handler_passive_logger(uint32_t parameter){
         }
     }
     else { //Invalid Parameter
-        log_w("Invalid Parameter");
+        ESP_LOGW(TAG_i2c, "Invalid Parameter");
         slave.write_one_byte(UNKNOWN);
     }
 }
@@ -949,16 +958,22 @@ void i2c_handler_passive_logger(uint32_t parameter){
  * @return Time (milli-seconds) for 0x4D;
  * @return UNKNOWN if undefined parameter
  */
-void i2c_handler_get_time(uint32_t parameter){
+void i2c_get_time(uint32_t parameter){
     if(parameter == 0xEE) { //Epoch
-        slave.write_four_bytes(rtc.getEpoch());
-        }
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
 
-    else if (parameter == 0x4D) { //ms
-        slave.write_four_bytes(rtc.getMillis());
+        slave.write_four_bytes(tv.tv_sec);
+    }
+
+    else if (parameter == 0x4D) { //us
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+
+        slave.write_four_bytes(tv.tv_usec);
     }
     else { //Invalid Parameter
-        log_w("Invalid Parameter");
+        ESP_LOGW(TAG_i2c, "Invalid Parameter");
         slave.write_one_byte(UNKNOWN);
     }
 }
@@ -971,11 +986,20 @@ void i2c_handler_get_time(uint32_t parameter){
  * 
  * @return VALID upon setting value
  */
-void i2c_handler_set_time(uint32_t parameter){
-    log_i("System time sync");
-    log_d("System time set to %x", parameter);
-    rtc.setTime(parameter);
+void i2c_set_time(uint32_t parameter){
+    ESP_LOGI(TAG_i2c, "System time sync");
 
+    struct timeval tv;
+    if (parameter > 2082758399){
+        tv.tv_sec = parameter - 2082758399;  // epoch time (seconds)
+    } else {
+        tv.tv_sec = parameter;  // epoch time (seconds)
+    }
+
+    tv.tv_usec = 0;    // microseconds
+    settimeofday(&tv, NULL);
+
+    ESP_LOGD(TAG_i2c, "System time set to %x", tv.tv_sec);
     slave.write_one_byte(VALID);
 }
 
@@ -991,11 +1015,11 @@ void i2c_handler_set_time(uint32_t parameter){
  * @return float Temperature
  * @return UNKNOWN if the parameter is undefined
  */
-void i2c_handler_get_temperature(uint32_t parameter){
-    log_w("PARAMETER: %02X", parameter);
+void i2c_get_temperature(uint32_t parameter){
+    ESP_LOGW(TAG_i2c, "PARAMETER: %02X", parameter);
     if(parameter >= number_of_temp_sensors) {
         slave.write_one_byte(UNKNOWN);
-        log_d("%i vs %i", parameter, number_of_temp_sensors);
+        ESP_LOGD(TAG_i2c, "%i vs %i", parameter, number_of_temp_sensors);
 
     }
     else {
@@ -1018,21 +1042,23 @@ void i2c_handler_get_temperature(uint32_t parameter){
  * 
  * @return int PWM duty (%)
  */
-void i2c_handler_get_pwm_duty(uint32_t parameter){
+void i2c_get_pwm_duty(uint32_t parameter){
     slave.write_one_byte(pwm.getDutyCycle());
 }
 
 void setup(){
 
     //set internal rtc clock
-    setTimeToCompile(&rtc);
-    sensor.init(&rtc);
+    setTimeToCompile();
 
     // Serial setup
     Serial.begin(UART_BAUD_RATE);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    log_i("Communication started over UART @ %i", UART_BAUD_RATE);
-    log_d("System time is %i/%i\n", rtc.getEpoch(), rtc.getMillis());
+    ESP_LOGI(TAG, "Communication started over UART @ %i", UART_BAUD_RATE);
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    ESP_LOGD(TAG, "System time is %i/%i\n", tv.tv_sec, tv.tv_usec);
 
     // i2c setup
     slave.init();
@@ -1045,36 +1071,36 @@ void setup(){
     // createLog(&storage, &active);
 
     //define i2c handler call functions
-    slave.install_i2c_handler_unused(i2c_handler_unused);
-    slave.install_i2c_handler_ignore(i2c_handler_ignore);
+    slave.install_handler_unused(i2c_unused);
+    slave.install_handler_ignore(i2c_ignore);
     
-    slave.install_i2c_handler(0x21, i2c_handler_restart_device);
-    slave.install_i2c_handler(0x02, i2c_handler_sleep_device);
-    slave.install_i2c_handler(0x03);
-    slave.install_i2c_handler(0x06, i2c_handler_get_experiment_status);
-    slave.install_i2c_handler(0x08, i2c_handler_start_experiment);
-    slave.install_i2c_handler(0x29, i2c_handler_stop_experiment);
-    slave.install_i2c_handler(0x2A, i2c_handler_set_number_of_stages);
-    slave.install_i2c_handler(0x8D, i2c_handler_set_stage_length);
-    slave.install_i2c_handler(0x4E, i2c_handler_set_max_temperature);
-    slave.install_i2c_handler(0x0F, i2c_handler_prepare_log);
-    slave.install_i2c_handler(0x11, i2c_handler_get_log);
-    slave.install_i2c_handler(0x32, i2c_handler_get_time);
-    slave.install_i2c_handler(0x93, i2c_handler_set_time);
-    slave.install_i2c_handler(0x34, i2c_handler_get_temperature);
-    slave.install_i2c_handler(0x15, i2c_handler_get_pwm_duty);
-    slave.install_i2c_handler(0x16, i2c_handler_get_current_stage);
-    slave.install_i2c_handler(0x97, i2c_handler_set_sampling_interval);
-    slave.install_i2c_handler(0x98, i2c_handler_set_startup_length);
-    slave.install_i2c_handler(0x99, i2c_handler_set_cooldown_length);
-    slave.install_i2c_handler(0x5A, i2c_handler_set_individual_pwm);
-    slave.install_i2c_handler(0x9B, i2c_handler_set_pwm_period);
-    slave.install_i2c_handler(0x1C, i2c_handler_reset_log);
-    slave.install_i2c_handler(0x9D, i2c_handler_set_individual_length);
-    slave.install_i2c_handler(0x9E, i2c_handler_set_passive_sampling_interval);
-    slave.install_i2c_handler(0x3F, i2c_handler_passive_logger);
+    slave.install_handler(0x21, i2c_restart_device);
+    slave.install_handler(0x02, i2c_sleep_device);
+    slave.install_handler(0x03);
+    slave.install_handler(0x06, i2c_get_experiment_status);
+    slave.install_handler(0x08, i2c_start_experiment);
+    slave.install_handler(0x29, i2c_stop_experiment);
+    slave.install_handler(0x2A, i2c_set_number_of_stages);
+    slave.install_handler(0x8D, i2c_set_stage_length);
+    slave.install_handler(0x4E, i2c_set_max_temperature);
+    slave.install_handler(0x0F, i2c_prepare_log);
+    slave.install_handler(0x11, i2c_get_log);
+    slave.install_handler(0x32, i2c_get_time);
+    slave.install_handler(0x93, i2c_set_time);
+    slave.install_handler(0x34, i2c_get_temperature);
+    slave.install_handler(0x15, i2c_get_pwm_duty);
+    slave.install_handler(0x16, i2c_get_current_stage);
+    slave.install_handler(0x97, i2c_set_sampling_interval);
+    slave.install_handler(0x98, i2c_set_startup_length);
+    slave.install_handler(0x99, i2c_set_cooldown_length);
+    slave.install_handler(0x5A, i2c_set_individual_pwm);
+    slave.install_handler(0x9B, i2c_set_pwm_period);
+    slave.install_handler(0x1C, i2c_reset_log);
+    slave.install_handler(0x9D, i2c_set_individual_length);
+    slave.install_handler(0x9E, i2c_set_passive_sampling_interval);
+    slave.install_handler(0x3F, i2c_passive_logger);
 
-    log_i("Setup completed.");
+    ESP_LOGI(TAG, "Setup completed.");
 
     xTaskCreatePinnedToCore(i2c_scan, "SCAN", 4096, NULL, tskIDLE_PRIORITY, NULL, 0); //i2c on core 0
 

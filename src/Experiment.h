@@ -14,20 +14,20 @@ typedef unsigned char uint8_t;
 typedef unsigned uint32_t;
 typedef int exp_err_t;
 
-#define min_to_ms(minute) (minute*60000)
-#define sec_to_ms(second) (second*1000)
+#define min_to_ms(minute)   (minute*60000)
+#define sec_to_ms(second)   (second*1000)
 
-#define EXP_OK 0
-#define EXP_BAD_STAGE 0x101
-#define EXP_BAD_PWM 0x102
+#define EXP_OK              0
+#define EXP_BAD_STAGE       0x101
+#define EXP_BAD_PWM         0x102
 
-#define EXP_INACTIVE 0
-#define EXP_ACTIVE 1
-#define EXP_STARTUP 2
-#define EXP_COOLDOWN 3
+#define EXP_INACTIVE        0
+#define EXP_ACTIVE          1
+#define EXP_STARTUP         2
+#define EXP_COOLDOWN        3
 
-#define STARTUP_TX 0x50
-#define COOLDOWN_TX 0x51
+#define STARTUP_TX          0x50
+#define COOLDOWN_TX         0x51
 
 /**
  * @brief Experiment parameter structure

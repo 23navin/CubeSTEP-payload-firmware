@@ -11,6 +11,9 @@
 #ifndef _file_H_INCLUDED
 #define _file_H_INCLUDED
 
+#include "esp_log.h"
+#include "esp_err.h"
+
 #include "Fs.h"
 #include "SPIFFS.h"
 #include <string>
