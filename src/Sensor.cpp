@@ -80,7 +80,7 @@ float SensorCore::sample(int sensor){
     //Convert voltage to temperature (K) usin thermistor characteristics
     resistance = ((THERMISTORNOMINAL*SUPPLYVOLTAGE)/voltage)-THERMISTORNOMINAL;
     temperature = (BCOEFFICIENT/log(resistance/r_inf))-KELVIN;
-    ESP_LOGI(TAG, "Sensor %i sampled at %f", sensor, temperature);
+    ESP_LOGD(TAG, "Sensor %i sampled at %f", sensor, temperature);
 
     //debug to uart
     // char debug[128];

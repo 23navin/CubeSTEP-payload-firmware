@@ -9,7 +9,10 @@
 #include "I2C.h"
 static const char* TAG = "I2cCore";
 
+
 I2cCore::I2cCore(){
+    esp_log_level_set(TAG, ESP_LOG_VERBOSE);
+
     ESP_LOGV(TAG, "SDA pin: %i", sda);
     ESP_LOGV(TAG, "SCL pin: %i", scl);
     ESP_LOGV(TAG, "Device Mode: %i", I2C_MODE_SLAVE);

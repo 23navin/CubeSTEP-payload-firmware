@@ -7,11 +7,16 @@
 */
 
 using namespace std;
+#include <string.h>
+
 #include "esp_log.h"
 #include "esp_err.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_system.h>
+#include <sys/unistd.h>
+#include <sys/stat.h>
+#include "esp_spiffs.h"
 
 #include "File.h"
 #include "Telemetry.h"
@@ -27,6 +32,9 @@ using namespace std;
 
 //UART
 #define UART_BAUD_RATE 115200 //default baud rate
+
+//SPI
+#define LOG_FILE_NAME "/spiffs/exp_log.csv"
 
 /* Support Functions */
 
@@ -57,70 +65,6 @@ void setTimeToCompile()
     settimeofday(&tv, NULL);
 }
 
-/**
- * @brief Creates a Log object
- * @note for testing
- * 
- * @param file_p 
- * @param tele 
- */
-esp_err_t createLog(FileCore *file_p, Telemetry *tele){
-    char header[1000];
-    tele->headerCSV(header);
-    return file_p->writeFile("/log.csv", header);
-}
-
-/**
- * @brief Deletes Log object
- * 
- * @param file_p 
- */
-esp_err_t deleteLog(FileCore *file_p) {
-    return file_p->deleteFile("/log.csv");
-}
-
-esp_err_t resetLog(FileCore *file_p, Telemetry *tele_p){
-    esp_err_t err;
-
-    err = deleteLog(file_p);
-    if(err != ESP_OK){
-        return err;
-    }
-
-    err = createLog(file_p, tele_p);
-
-    return err;
-}
-
-/**
- * @brief Adds line to file
- * @note for testing
- * 
- * @param file_p 
- * @param tele 
- */
-void addLine(FileCore *file_p, Telemetry *tele){
-    char line[line_size];
-    tele->ToCSV(line);
-    file_p->appendFile("/log.csv", line);
-}
-
-/**
- * @brief Saves system snapshot to Telemetry object and saves it to log
- * 
- * @param file_p 
- * @param sens_p 
- * @param pwm_p 
- */
-void log_capture(FileCore *file_p, SensorCore *sens_p, HeaterCore *pwm_p){
-    Telemetry capture;
-    sens_p->snapshot(&capture);
-    pwm_p->snapshot(&capture);
-    addLine(file_p, &capture);
-    ESP_LOGI(TAG, "Telemetry recorded at %i/%i", capture.Seconds, capture.uSeconds);
-
-}
-
 /* Objects */
 
 FileCore storage;
@@ -137,7 +81,7 @@ TaskHandle_t exp_run_task = NULL;
 TaskHandle_t exp_log_task = NULL;
 TaskHandle_t exp_plog_task = NULL;
 
-/* Routines */
+/* Tasks */
 
 /**
  * @brief Task that scans i2c bus for message. If message received,
@@ -238,11 +182,47 @@ void exp_log(void *pvParameters){
     uint32_t *interval = (uint32_t *) pvParameters;
     const TickType_t xDelay = *interval / portTICK_PERIOD_MS;
     ESP_LOGI(TAG_task, "Logger started: interval %ims", *interval);
+    
+    //objects to hold log data
+    Telemetry capture;
+    char line[line_size];
 
     while(1){
+        //set logger status as active
         payload.logger_status = true;
-        log_capture(&storage, &sensor, &pwm);
+
+        //capture time data
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        capture.setTime(tv.tv_sec, tv.tv_usec);
+
+        //capture temperature data
+        for(int sensor_number = 0; sensor_number < number_of_temp_sensors; sensor_number++){
+            //Gather data
+            float buffer = sensor.sample(sensor_number);
+
+            //Put data into Telemetry object
+            capture.setTemp(sensor_number, buffer);
+        }
+
+        //capture heater data
+        if(pwm.getStatus()){
+            //if pwm is on
+            capture.setPWM(pwm.getDutyCycle(), pwm.getCyclePeriod());
+        }
+        else{
+            //if pwm is off
+            capture.setPWM(0, pwm.getCyclePeriod());
+        }
+
+        //log telemetry
+        capture.ToCSV(line);
+        storage.addLine(LOG_FILE_NAME, line);
+
+        //set logger status as inactive
         payload.logger_status = false;
+
+        //wait interval
         vTaskDelay(xDelay);
     }
 }
@@ -814,7 +794,7 @@ void i2c_set_passive_sampling_interval(uint32_t parameter){
 }
 
 /**
- * @brief OpCode 0x0F
+ * @brief OpCode 0x0F (deprecated)
  * @note Prepares experiment log file to be read by the
  * I2C system. This function must be called before get_log
  * 
@@ -823,11 +803,6 @@ void i2c_set_passive_sampling_interval(uint32_t parameter){
  * @return VALID when log is ready to be read :)
  */
 void i2c_prepare_log(uint32_t parameter){
-    // log_buffer = storage.loadFile("/log.csv");
-    // slave.write_one_byte(log_buffer.size());
-
-    storage.select_file("/log.csv");
-    slave.write_one_byte(VALID);
 }
 
 /**
@@ -847,13 +822,11 @@ void i2c_get_log(uint32_t parameter){
     string buffer;
     int line;
 
-    line = storage.read_file(&buffer);
+    line = storage.readLine(LOG_FILE_NAME,&buffer);
     if(line != -1) {
         slave.write_string(buffer);
     }
     else {
-        storage.deselect_file();
-        
         slave.write_one_byte(INVALID);
     }
 }
@@ -869,19 +842,13 @@ void i2c_get_log(uint32_t parameter){
  * @return INVALID if SPI error
  */
 void i2c_reset_log(uint32_t parameter){
-    esp_err_t err;
+    //erase log
+    storage.clearLog(LOG_FILE_NAME);
 
-    err = deleteLog(&storage);
-    if(err != ESP_OK){
-        slave.write_one_byte(INVALID);
-        return;
-    }
-
-    err = createLog(&storage, &active);
-    if(err != ESP_OK){
-        slave.write_one_byte(INVALID);
-        return;
-    }
+    //add header
+    char header[BUFFER_SIZE];
+    active.headerCSV(header);
+    storage.addLine(LOG_FILE_NAME, header);
 
     slave.write_one_byte(VALID);
 }
@@ -1103,7 +1070,6 @@ void setup(){
     ESP_LOGI(TAG, "Setup completed.");
 
     xTaskCreatePinnedToCore(i2c_scan, "SCAN", 4096, NULL, tskIDLE_PRIORITY, NULL, 0); //i2c on core 0
-
 }
 
 void loop(){

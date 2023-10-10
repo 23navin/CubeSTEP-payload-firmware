@@ -3,9 +3,6 @@
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
  * @brief Configure and control Flash memory over SPI.
- * @note Sourced from: https://www.tutorialspoint.com/esp32_for_iot/esp32_for_iot_spiffs_storage.htm
- * @note SPIFF reference: https://github.com/espressif/arduino-esp32/tree/master/libraries/SPIFFS
- * @note Fs reference: https://github.com/espressif/arduino-esp32/tree/master/libraries/FS
 **/
 
 #ifndef _file_H_INCLUDED
@@ -14,14 +11,18 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
-#include "Fs.h"
+#include <string.h>
+#include <sys/unistd.h>
+#include <sys/stat.h>
+#include "esp_spiffs.h"
+
 #include "SPIFFS.h"
 #include <string>
 #include <vector>
 
 using namespace std;
 
-#define FORMAT_SPIFFS_IF_FAILED true // Formats flash storage if it cannot be mounted
+#define BUFFER_SIZE 256
 
 /**
  * @brief Flash storage core driver:
@@ -39,76 +40,47 @@ public:
     ~FileCore();
 
     /**
-     * @brief mounts the FAT flash storage device over SPI
+     * @brief mounts the SPIFFS flash storage device over SPI
      * 
      */
     void mount();
 
     /**
-     * @brief displays file directory in Serial monitor
+     * @brief Checks the SPIFFS partition
      * 
-     * @param dirname root folder to read
-     * @param levels number of levels under root folder to read
      */
-    void listDir(const char * dirname, uint8_t levels);
+    void checkSPIFFS();
 
     /**
-     * @brief displays a file's contents in the Serial Monitor
+     * @brief Overwrites with a blank file
      * 
-     * @param path file's location
+     * @param path file location
      */
-    void readFile(const char * path);
-
-    std::vector<String> loadFile(const char *path);
-
-    int read_file(std::string *string_out);
-
-    void select_file(const char *path);
-
-    void deselect_file();
+    void clearLog(const char *path);
 
     /**
-     * @brief creates a file
+     * @brief Adds a line to the end of a file
      * 
-     * @param path file's location
-     * @param message data to be written on creation
+     * @param path file location
+     * @param message data to append
      */
-    esp_err_t writeFile(const char * path, const char * message);
+    void addLine(const char *path, const char *message);
 
     /**
-     * @brief appends data to the end of an existing file
+     * @brief Reads a line from the file in consecutive order.
+     * Starting from the first line. Call again to read the next line
      * 
-     * @param path file's location
-     * @param message data to be appended
+     * @param path file location
+     * @param string_out string to write line data to
+     * @return int - if -1, there are no more lines to read, else returns
+     * the number of the line returned.
      */
-    void appendFile(const char * path, const char * message);
-
-    /**
-     * @brief redefine's a file's path and name
-     * 
-     * @param path1 file's original location and name
-     * @param path2 file's modified location and name
-     */
-    void renameFile(const char * path1, const char * path2);
-
-    /**
-     * @brief removes a file
-     * 
-     * @param path file to be removed
-     */
-    esp_err_t deleteFile(const char * path);
-
-    /**
-     * @brief benchmark to measure read and write time for a 1MB file
-     * 
-     * @param path location of benchmark file
-     * @return time in milliseconds
-     */
-    uint32_t testFileIO(const char * path);
+    int readLine(const char *path, std::string *string_out);
 
 private:
-    File open_file;
-    uint8_t line;
+    esp_vfs_spiffs_conf_t conf; //config data for SPIFFS
+    int line_number; //number of line last read by readLine()
+    FILE *open_file; //File object being read by readLine()
 };
 
 #endif // _file_H_INCLUDED

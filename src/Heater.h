@@ -12,6 +12,8 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
+#include "ESP32Time.h"
+
 #include "driver/timer.h"
 #include "driver/gpio.h"
 

@@ -11,215 +11,129 @@ static const char* TAG = "FileCore";
 
 FileCore::FileCore(){
     mount();
+    checkSPIFFS();
+
+    line_number = 0;
 }
 
 FileCore::~FileCore(){
-} //should be unused
+    esp_vfs_spiffs_unregister(conf.partition_label);
+}
 
 void FileCore::mount(){
-    if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-        ESP_LOGE(TAG, "SPIFFS Mount Failed");
-        return;
-    }
+    ESP_LOGI(TAG, "Initializing SPIFFS");
 
-    ESP_LOGI(TAG, "SPIFFS Mount Successfull");
-    return;
-}
+    conf = {
+      .base_path = "/spiffs",
+      .partition_label = NULL,
+      .max_files = 5,
+      .format_if_mount_failed = true
+    };
 
-void FileCore::listDir(const char * dirname, uint8_t levels){
-    ESP_LOGD(TAG, "Listing directory: %s\r", dirname);
+    // Use settings defined above to initialize and mount SPIFFS filesystem.
+    // Note: esp_vfs_spiffs_register is an all-in-one convenience function.
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
 
-    File root = SPIFFS.open(dirname);
-    if(!root){
-        ESP_LOGW(TAG, "%s - failed to open directory", dirname);
-        return;
-    }
-    if(!root.isDirectory()){
-        ESP_LOGW(TAG, "%s - not a directory", dirname);
-        return;
-    }
-
-    File file = root.openNextFile();
-    while(file){
-        if(file.isDirectory()){
-            ESP_LOGD(TAG, "  DIR : %s", file.name());
-            if(levels){
-                listDir(file.path(), levels -1);
-            }
-        }else{
-            ESP_LOGD(TAG, "  FILE : %s\t SIZE: %i", file.name(), file.size());
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Failed to find SPIFFS partition");
+        } else {
+            ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
         }
-        file = root.openNextFile();
+        return;
     }
 }
 
-void FileCore::readFile(const char * path){
-    ESP_LOGD(TAG, "Reading file: %s\r", path);
+void FileCore::checkSPIFFS(){
+    size_t total = 0, used = 0;
+    esp_err_t ret = esp_spiffs_info(conf.partition_label, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
+        esp_spiffs_format(conf.partition_label);
+        return;
+    } else {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
 
-    File file = SPIFFS.open(path);
-    if(!file || file.isDirectory()){
-        ESP_LOGW(TAG, "%s - failed to open file for reading", path);
+    // Check consistency of reported partiton size info.
+    if (used > total) {
+        ESP_LOGW(TAG, "Number of used bytes cannot be larger than total. Performing SPIFFS_check().");
+        ret = esp_spiffs_check(conf.partition_label);
+        // Could be also used to mend broken files, to clean unreferenced pages, etc.
+        // More info at https://github.com/pellepl/spiffs/wiki/FAQ#powerlosses-contd-when-should-i-run-spiffs_check
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "SPIFFS_check() failed (%s)", esp_err_to_name(ret));
+            return;
+        } else {
+            ESP_LOGI(TAG, "SPIFFS_check() successful");
+        }
+    }
+}
+
+void FileCore::clearLog(const char *path){
+    FILE *file = fopen(path, "w");
+    if (file == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for writing");
         return;
     }
 
-    ESP_LOGD(TAG, "- read from file: ");
-    while(file.available()){
-        Serial.write(file.read());
-    }
-    file.close();
+    ESP_LOGI(TAG, "%s - File cleared", path);
 }
 
-std::vector<String> FileCore::loadFile(const char *path){
-    ESP_LOGD(TAG, "Reading file: %s\r", path);
-
-    File file = SPIFFS.open(path);
-    if(!file || file.isDirectory()){
-        ESP_LOGW(TAG, "%s - failed to open file for reading", path);
-        //return;
-    }
-
-    vector<String> lines;
-    String buffer;
-
-    while(file.available()){
-        lines.push_back(file.readStringUntil('\n'));
-    }
-    
-    file.close();
-    
-    return lines;
-}
-
-void FileCore::select_file(const char *path){
-    ESP_LOGI(TAG, "Opening File for reading");
-    open_file = SPIFFS.open(path);
-    if(!open_file || open_file.isDirectory()){
-        ESP_LOGW(TAG, "%s - failed to open file for reading", path);
-    }
-    line = 0;
-}
-
-void FileCore::deselect_file(){
-    ESP_LOGI(TAG, "Closing file");
-    open_file.close();
-}
-
-int FileCore::read_file(std::string *string_out){
-    if(open_file.available()) {
-        ESP_LOGD(TAG, "Reading Line %i", line);
-        String buffer;
-        buffer = open_file.readStringUntil('\n');
-        *string_out = std::string(buffer.c_str());
-        line++;
-
-        return line;
-    }
-
-    return -1;
-}
-
-esp_err_t FileCore::writeFile(const char * path, const char * message){
-    ESP_LOGD(TAG, "Writing file: %s\r", path);
-
-    File file = SPIFFS.open(path, FILE_WRITE);
-    if(!file){
-        Serial.println("- failed to open file for writing");
-        return ESP_FAIL;
-    }
-    if(file.print(message)){
-        ESP_LOGD(TAG, "- file written");
-        return ESP_OK;
-    } else {
-        ESP_LOGW(TAG, "- write failed");
-        return ESP_FAIL;
-    }
-    file.close();
-}
-
-void FileCore::appendFile(const char * path, const char * message){
-    ESP_LOGV(TAG, "Appending to file: %s\r", path);
-
-    File file = SPIFFS.open(path, FILE_APPEND);
-    if(!file){
-        ESP_LOGW(TAG, "%s - failed to open file for appending", path);
+void FileCore::addLine(const char *path, const char *message){
+    //open file
+    FILE *file = fopen(path, "a");
+    if (file == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for writing");
         return;
     }
-    if(file.print(message)){
-        ESP_LOGV(TAG, "- message appended");
-    } else {
-        ESP_LOGW(TAG, "- append failed");
-    }
-    file.close();
+
+    //add line
+    fprintf(file, message);
+
+    //close line
+    fclose(file);
+    ESP_LOGI(TAG, "Line written");
 }
 
-void FileCore::renameFile(const char * path1, const char * path2){
-    ESP_LOGD(TAG, "Renaming file %s to %s\r", path1, path2);
-    if (SPIFFS.rename(path1, path2)){
-        ESP_LOGD(TAG, "- file %s renamed to %s", path1, path2);
-    } else {
-        ESP_LOGW(TAG, "- %s rename failed", path1);
+int FileCore::readLine(const char *path, std::string *string_out){
+    //open file if first request
+    if(line_number == 0){
+        open_file = fopen(path, "r");
+        if (open_file == NULL) {
+            ESP_LOGE(TAG, "Failed to open file for writing");
+            return -1;
+        }
     }
-}
 
-esp_err_t FileCore::deleteFile(const char * path){
-    ESP_LOGD(TAG, "Deleting file: %s\r", path);
-    if(SPIFFS.remove(path)){
-        ESP_LOGV(TAG, "- file %s deleted", path);
-        return ESP_OK;
-    } else {
-        ESP_LOGW(TAG, "- %s delete failed", path);
-        return ESP_FAIL;
+    char line_buffer[BUFFER_SIZE];
+
+    // read line
+    if(fgets(line_buffer, BUFFER_SIZE, open_file) != NULL){
+        // strip newline
+        char *pos = strchr(line_buffer, '\n');
+        if (pos) {
+            *pos = '\0';
+        }
+        ESP_LOGI(TAG, "Read from file: '%s'", line_buffer);
+
+        //copy line to string_out
+        *string_out = std::string(line_buffer);
+
+        //return fn and increment line count
+        ESP_LOGI(TAG, "Line read %i", line_number);
+        return line_number++;
     }
-}
+    else{
+        //close file
+        fclose(open_file);
 
-uint32_t FileCore::testFileIO(const char * path){
-    ESP_LOGI(TAG, "Starting File test");
-    static uint8_t buf[512];
-    size_t len = 0;
-    File file = SPIFFS.open(path, FILE_WRITE);
-    if(!file){
+        //reset line count
+        line_number = 0;
+
+        ESP_LOGW(TAG, "End of File");
         return -1;
     }
-
-    size_t i;
-    ESP_LOGD(TAG, "- writing" );
-    uint32_t start = millis();
-    uint32_t end;
-    for(i=0; i<2048; i++){
-        // if ((i & 0x001F) == 0x001F){
-        // Serial.print(".");
-        // }
-        file.write(buf, 512);
-    }
-    // Serial.println("");
-    file.close();
-
-    file = SPIFFS.open(path);
-    i = 0;
-    if(file && !file.isDirectory()){
-        len = file.size();
-        size_t flen = len;
-        ESP_LOGD(TAG, "- reading" );
-        while(len){
-            size_t toRead = len;
-            if(toRead > 512){
-                toRead = 512;
-            }
-            file.read(buf, toRead);
-            // if ((i++ & 0x001F) == 0x001F){
-            // Serial.print(".");
-            // }
-            len -= toRead;
-        }
-        // Serial.println("");
-        end = millis() - start;
-        file.close();
-
-        SPIFFS.remove(path);
-        return end;
-    } else {
-        return -1;     
-    }
-
-    return -1;
 }
