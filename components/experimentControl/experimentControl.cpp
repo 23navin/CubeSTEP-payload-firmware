@@ -5,7 +5,7 @@
  * @brief Implementation of Experiment structure
 **/
 
-#include "Experiment.h"
+#include "experimentControl.h"
 
 Experiment::Experiment(){
     status = false;
