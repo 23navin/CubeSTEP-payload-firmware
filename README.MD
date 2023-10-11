@@ -8,7 +8,7 @@ California State Polytechnic University, Pomona
 
 The firmware for the Payload Processor was developed using the ESP-IDF extension for VS Code to build and upload the code to the ESP32 microprocessor. The ESP32-Pico-D4 development kit was used to test and debug the firmware while the Payload component is being developed.
 
-To Do
+## To Do
 
 * Rework logging to be consistent
 * Clean up I2C calls
