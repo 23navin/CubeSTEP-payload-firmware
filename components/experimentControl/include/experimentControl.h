@@ -11,7 +11,7 @@
 #define STAGE_COUNT_MAX 32
 
 typedef unsigned char uint8_t;
-typedef unsigned uint32_t;
+typedef unsigned long uint32_t;
 typedef int exp_err_t;
 
 #define min_to_ms(minute)   (minute*60000)

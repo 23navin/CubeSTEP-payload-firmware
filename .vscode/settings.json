@@ -1,9 +1,20 @@
 {
-    "files.associations": {
-        "*.v": "verilog",
-        "cmath": "cpp",
-        "cstddef": "cpp",
-        "limits": "cpp",
-        "string": "cpp"
-    }
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.flashType": "UART",
+  "idf.port": "/dev/cu.usbserial-10",
+  "idf.adapterTargetName": "esp32",
+  "files.associations": {
+    "*.v": "verilog",
+    "atomic": "cpp",
+    "*.tcc": "cpp",
+    "chrono": "cpp",
+    "cstdint": "cpp",
+    "random": "cpp",
+    "stop_token": "cpp",
+    "*.inc": "cpp",
+    "bitset": "cpp",
+    "memory": "cpp",
+    "future": "cpp",
+    "type_traits": "cpp"
+  }
 }
