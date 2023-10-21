@@ -2,28 +2,28 @@
  * @file Sensor.cpp
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
- * @brief Implemetation of SensorCore class
+ * @brief Implemetation of adc class
 **/
 
 #include "adcControl.h"
-static const char* TAG = "SensorCore";
+static const char* TAG = "adc";
 
-SensorCore::SensorCore(){
+adcControl::adc::adc(){
     //Set up ADC units
-    esp_adc_cal_characterize(ADC_UNIT_1, _adc_attenuation, ADC_WIDTH_BIT_12, ESP_ADC_CAL_VAL_DEFAULT_VREF, &adc1_chars);
-    esp_adc_cal_characterize(ADC_UNIT_2, _adc_attenuation, ADC_WIDTH_BIT_12, ESP_ADC_CAL_VAL_DEFAULT_VREF, &adc2_chars);
+    esp_adc_cal_characterize(ADC_UNIT_1, adcAttenuation, ADC_WIDTH_BIT_12, ESP_ADC_CAL_VAL_DEFAULT_VREF, &adc1_chars);
+    esp_adc_cal_characterize(ADC_UNIT_2, adcAttenuation, ADC_WIDTH_BIT_12, ESP_ADC_CAL_VAL_DEFAULT_VREF, &adc2_chars);
     adc_set_data_inv((adc_unit_t)3, true); //inverts both adcs; unsure why this is needed :|
 
     // adc_power_acquire();
     
 }
 
-SensorCore::~SensorCore(){
+adcControl::adc::~adc(){
     ESP_LOGI(TAG, "POWER ADC OFF");
     // adc_power_release();
 }
 
-void SensorCore::readADC1(int *value_out, adc1_channel_t channel){
+void adcControl::adc::readADC1(int *value_out, adc1_channel_t channel){
     int buffer;
     
     //read ADC
@@ -35,7 +35,7 @@ void SensorCore::readADC1(int *value_out, adc1_channel_t channel){
     *value_out = buffer;
 }
 
-void SensorCore::readADC2(int *value_out, adc2_channel_t channel){
+void adcControl::adc::readADC2(int *value_out, adc2_channel_t channel){
     int buffer, ignore;
 
     //read ADC
@@ -47,7 +47,7 @@ void SensorCore::readADC2(int *value_out, adc2_channel_t channel){
     *value_out = buffer;
 }
 
-float SensorCore::sample(int sensor){
+float adcControl::adc::sample(int sensor){
     int adc_channel; //adc channel irrespective of adc unit
     uint32_t reading = 0; //adc read value
     uint32_t average_reading; //average of samples
@@ -63,40 +63,39 @@ float SensorCore::sample(int sensor){
     else adc_channel = sensor;
     
     //sample ADC loop
-    for (int i = 0; i < num_of_samples; i++)
+    for (int i = 0; i < numSamples; i++)
     {
         int buffer;
 
         if(sensor < 8) readADC1(&buffer, (adc1_channel_t)adc_channel); //if sensor0-7, use adc1
         else readADC2(&buffer, (adc2_channel_t)adc_channel); //if sensor 8-15, use adc2
-
         reading += buffer; //add sample to loop sum
     } //sampling loop
-    average_reading = reading / num_of_samples; //divide loop sum by number of samples to find average sample reading
+    average_reading = reading / numSamples; //divide loop sum by number of samples to find average sample reading
 
     //Convert sample reading to a voltage (mV) using adc characteristics
     if(sensor < 8) voltage = esp_adc_cal_raw_to_voltage(average_reading, &adc1_chars);
     else voltage = esp_adc_cal_raw_to_voltage(average_reading, &adc2_chars);
     
     //Convert voltage to temperature (K) usin thermistor characteristics
-    resistance = ((THERMISTORNOMINAL*SUPPLYVOLTAGE)/voltage)-THERMISTORNOMINAL;
-    temperature = (BCOEFFICIENT/log(resistance/r_inf))-KELVIN;
+    resistance = ((thermistorNominal*supplyVoltage)/voltage)-thermistorNominal;
+    temperature = (bCoefficient/log(resistance/r_inf))-kelvin;
     ESP_LOGD(TAG, "Sensor %i sampled at %f", (int)sensor, (float)temperature);
 
 
     return temperature;
 }
 
-float SensorCore::test(){
+float adcControl::adc::test(){
     float average = 0;
 
-    for(int sensor = 0; sensor < num_of_sensors; sensor++){
+    for(int sensor = 0; sensor < numSensors; sensor++){
         float buffer = sample(sensor);
         ESP_LOGV(TAG, "Sensor %i @ %f", (int)sensor, (float)buffer);
         average += buffer;
     }
 
-    average /= num_of_sensors;
+    average /= numSensors;
     ESP_LOGD(TAG, "SensorCore tested. Average temperature: %f", (float)average);
 
     return average;

@@ -15,163 +15,160 @@
 #include "driver/timer.h"
 #include "driver/gpio.h"
 
-// TIMER
-#define TIMER_DIVIDER           65536
-#define TIMER_BASE_CLK          ( 80*1000000 ) //timer deprecated
-#define TIMER_SCALE             (TIMER_BASE_CLK / TIMER_DIVIDER)  // one second
-#define TIMER_GROUP             TIMER_GROUP_0
-#define TIMER_ID_MAIN           TIMER_0
-#define TIMER_ID_ON             TIMER_1
+namespace pwmControl{
+    //Timer config
+    constexpr int timerDivider = 65536;
+    constexpr int timerScale = (80*1000000)/timerDivider;
+    constexpr timer_group_t timerGroup = TIMER_GROUP_0;
+    constexpr timer_idx_t timerIdMain = TIMER_0;
+    constexpr timer_idx_t timerIdOn = TIMER_1;
 
-// GPIO output
-#define PWM_OUTPUT_PIN          GPIO_NUM_5 // GPIO pin used for PWM output
-#define GPIO_OUTPUT_PIN_SEL     (1ULL<<PWM_OUTPUT_PIN)
+    constexpr gpio_num_t pwm_pin = GPIO_NUM_5;
 
-// Parameter Checks
-#define PWM_PERIOD_MIN          (0.1)
-
-//GPIO Levels
-#define LEVEL_HIGH                    0x1
-#define LEVEL_LOW                     0x0
-
-/**
- * @brief Interface to control PWM output for battery heaters
- * @note - Configure GPIO pad
- * @note - Configure General Purpose Timers to create a PWM signal
- * @note - Route PWM signal to a GPIO pin
- * @note - Suspend and resume PWM signal
- */
-class HeaterCore{
-public:
-    /**
-     * @brief Construct a new Heater Core object
-     * @note calls initGPIO and sets timer config
-     */
-    HeaterCore();
+    //pwm parameters
+    constexpr float minPeriod = 0.1;
+    constexpr uint32_t levelHigh = 0x1;
+    constexpr uint32_t levelLow = 0x0;
 
     /**
-     * @brief Destroy the Heater Core object
-     * 
+     * @brief Interface to control PWM output for battery heaters
+     * @note - Configure GPIO pad
+     * @note - Configure General Purpose Timers to create a PWM signal
+     * @note - Route PWM signal to a GPIO pin
+     * @note - Suspend and resume PWM signal
      */
-    ~HeaterCore();
-    
-    /**
-     * @brief Configure GPIO pin for PWM output
-     * @note This function is called in the HeaterCore constructor.
-     */
-    void initGPIO();
+    class pwm{
+    public:
+        /**
+         * @brief Construct a new Heater Core object
+         * @note calls initGPIO and sets timer config
+         */
+        pwm(gpio_num_t pwm_io_pin);
 
-    /**
-     * @brief Configure timers to create a PWM signal
-     * @note call startPWM after to start output
-     */
-    void initPWM();
-    
-    /**
-     * @brief Start PWM output
-     * @note initPWM must be called before calling this function
-     */
-    void startPWM();
+        /**
+         * @brief Destroy the Heater Core object
+         * 
+         */
+        ~pwm();
+        
+        /**
+         * @brief Configure GPIO pin for PWM output
+         * @note This function is called in the pwm constructor.
+         */
+        void initGPIO();
 
-    /**
-     * @brief Pauses PWM output and resets timing to the beginning of the PWM cycle
-     * 
-     */
-    void resetPWM();
+        /**
+         * @brief Configure timers to create a PWM signal
+         * @note call startPWM after to start output
+         */
+        void initPWM();
+        
+        /**
+         * @brief Start PWM output
+         * @note initPWM must be called before calling this function
+         */
+        void startPWM();
 
-    /**
-     * @brief Pause PWM output
-     * 
-     */
-    void pausePWM();
+        /**
+         * @brief Pauses PWM output and resets timing to the beginning of the PWM cycle
+         * 
+         */
+        void resetPWM();
 
-    /**
-     * @brief Resume PWM output
-     * 
-     */
-    void resumePWM();
+        /**
+         * @brief Pause PWM output
+         * 
+         */
+        void pausePWM();
 
-    /**
-     * @brief Change the PWM cycle and duty periods
-     * @note briefly pauses the PWM timers while changing
-     * 
-     * @param cycle_period Length of the PWM cycle (seconds)
-     * @param duty_period Length of the PWM duty (seconds)
-     */
-    void setPWM(float cycle_period, float duty_period);
+        /**
+         * @brief Resume PWM output
+         * 
+         */
+        void resumePWM();
 
-    /**
-     * @brief Change the PWM duty period
-     * @note briefly pauses the PWM timers while changing
-     * 
-     * @param duty_period Length of the PWM duty (seconds)
-     */
-    void setDutyPeriod(float duty_period);
+        /**
+         * @brief Change the PWM cycle and duty periods
+         * @note briefly pauses the PWM timers while changing
+         * 
+         * @param cycle_period Length of the PWM cycle (seconds)
+         * @param duty_period Length of the PWM duty (seconds)
+         */
+        void setPWM(float cycle_period, float duty_period);
 
-    /**
-     * @brief Set the PWM length and duty cycle
-     * 
-     * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
-     * @param period Length of the PWM duty (seconds)
-     */
-    void setDutyCycle(int duty_cycle, float period);
+        /**
+         * @brief Change the PWM duty period
+         * @note briefly pauses the PWM timers while changing
+         * 
+         * @param duty_period Length of the PWM duty (seconds)
+         */
+        void setDutyPeriod(float duty_period);
 
-    /**
-     * @brief Set the Duty Cycle
-     * 
-     * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
-     */
-    void setDutyCycle(int duty_cycle);
+        /**
+         * @brief Set the PWM length and duty cycle
+         * 
+         * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
+         * @param period Length of the PWM duty (seconds)
+         */
+        void setDutyCycle(int duty_cycle, float period);
 
-    /**
-     * @brief Get the Cycle Period object
-     * 
-     * @return float
-     */
-    float getCyclePeriod();
+        /**
+         * @brief Set the Duty Cycle
+         * 
+         * @param duty_cycle Duty Cycle of PWM signal from 0% to 100%
+         */
+        void setDutyCycle(int duty_cycle);
 
-    /**
-     * @brief Get the Duty Period object
-     * 
-     * @return float 
-     */
-    float getDutyPeriod();
+        /**
+         * @brief Get the Cycle Period object
+         * 
+         * @return float
+         */
+        float getCyclePeriod();
 
-    inline int getDutyCycle(){
-        return (int)((dutyPeriod/cyclePeriod)*100);
-    }
+        /**
+         * @brief Get the Duty Period object
+         * 
+         * @return float 
+         */
+        float getDutyPeriod();
 
-    inline bool getStatus(){
-        return statusTimer;
-    }
-    
-private:
-    /**
-     * @brief Length of the PWM cyle in seconds
-     * @note Default is 12 seconds
-     * @note Must be longer than dutyPeriod
-     */
-    float cyclePeriod = 12;
+        inline int getDutyCycle(){
+            return (int)((dutyPeriod/cyclePeriod)*100);
+        }
 
-    /**
-     * @brief Length of the duty cyle in seconds
-     * @note Default is 2 seconds
-     * @note Must be shorter than cyclePeriod
-     */
-    float dutyPeriod = 2;
+        inline bool getStatus(){
+            return statusTimer;
+        }
+        
+    private:
+        /**
+         * @brief Length of the PWM cyle in seconds
+         * @note Default is 12 seconds
+         * @note Must be longer than dutyPeriod
+         */
+        float cyclePeriod = 12;
 
-    /**
-     * @brief Config object for timers
-     * @note Is filled upon construction of HeaterCore
-     */
-    timer_config_t tmr_config;
+        /**
+         * @brief Length of the duty cyle in seconds
+         * @note Default is 2 seconds
+         * @note Must be shorter than cyclePeriod
+         */
+        float dutyPeriod = 2;
 
-    /**
-     * @brief Keeps track of whether the PWM timers are running or not
-     * 
-     */
-    bool statusTimer = false;
+        /**
+         * @brief Config object for timers
+         * @note Is filled upon construction of pwm
+         */
+        timer_config_t tmr_config;
 
-};
+        /**
+         * @brief Keeps track of whether the PWM timers are running or not
+         * 
+         */
+        bool statusTimer = false;
+
+    };
+}
 
 #endif // _heater_H_included

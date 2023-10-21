@@ -2,25 +2,25 @@
  * @file File.cpp
  * @author Benjamin Navin (bnjames@cpp.edu)
  * 
- * @brief Implementation of FileCore class
+ * @brief Implementation of spiffs class
 **/
 
-#include "fileControl.h"
-static const char* TAG = "FileCore";
+#include "spiffsControl.h"
+static const char* TAG = "spiffs";
 
 
-FileCore::FileCore(){
+spiffsControl::spiffs::spiffs(){
     mount();
     checkSPIFFS();
 
     line_number = 0;
 }
 
-FileCore::~FileCore(){
+spiffsControl::spiffs::~spiffs(){
     esp_vfs_spiffs_unregister(conf.partition_label);
 }
 
-void FileCore::mount(){
+void spiffsControl::spiffs::mount(){
     ESP_LOGI(TAG, "Initializing SPIFFS");
 
     conf = {
@@ -46,7 +46,7 @@ void FileCore::mount(){
     }
 }
 
-void FileCore::checkSPIFFS(){
+void spiffsControl::spiffs::checkSPIFFS(){
     size_t total = 0, used = 0;
     esp_err_t ret = esp_spiffs_info(conf.partition_label, &total, &used);
     if (ret != ESP_OK) {
@@ -72,7 +72,7 @@ void FileCore::checkSPIFFS(){
     }
 }
 
-void FileCore::clearLog(const char *path){
+void spiffsControl::spiffs::clearLog(const char *path){
     FILE *file = fopen(path, "w");
     if (file == NULL) {
         ESP_LOGE(TAG, "Failed to open file for writing");
@@ -82,7 +82,7 @@ void FileCore::clearLog(const char *path){
     ESP_LOGI(TAG, "%s - File cleared", path);
 }
 
-void FileCore::addLine(const char *path, const char *message){
+void spiffsControl::spiffs::addLine(const char *path, const char *message){
     //open file
     FILE *file = fopen(path, "a");
     if (file == NULL) {
@@ -98,7 +98,7 @@ void FileCore::addLine(const char *path, const char *message){
     ESP_LOGI(TAG, "Line written");
 }
 
-int FileCore::readLine(const char *path, std::string *string_out){
+int spiffsControl::spiffs::readLine(const char *path, std::string *string_out){
     //open file if first request
     if(line_number == 0){
         open_file = fopen(path, "r");
@@ -108,10 +108,10 @@ int FileCore::readLine(const char *path, std::string *string_out){
         }
     }
 
-    char line_buffer[BUFFER_SIZE];
+    char line_buffer[buffer_size];
 
     // read line
-    if(fgets(line_buffer, BUFFER_SIZE, open_file) != NULL){
+    if(fgets(line_buffer, buffer_size, open_file) != NULL){
         // strip newline
         char *pos = strchr(line_buffer, '\n');
         if (pos) {

@@ -7,12 +7,12 @@
 
 #include "experimentControl.h"
 
-Experiment::Experiment(){
+experimentControl::Experiment::Experiment(){
     status = false;
     logger_status = false;
     passive_logger_status = false;
-    pwm_duty = new uint8_t[STAGE_COUNT_MAX];
-    length = new uint32_t[STAGE_COUNT_MAX];
+    pwm_duty = new uint8_t[maxStages];
+    length = new uint32_t[maxStages];
 
     stage_count = 10;
     pwm_period = 12; //12 seconds default
@@ -25,13 +25,13 @@ Experiment::Experiment(){
     generate_pwm_duty_array();
 }
 
-Experiment::~Experiment(){
+experimentControl::Experiment::~Experiment(){
     delete[] pwm_duty;
     delete[] length;
 }
 
-exp_err_t Experiment::set_stage_count(uint8_t stage_count_value){
-    if(stage_count_value > STAGE_COUNT_MAX) {
+experimentControl::exp_err_t experimentControl::Experiment::set_stage_count(uint8_t stage_count_value){
+    if(stage_count_value > maxStages) {
         return EXP_BAD_STAGE;
     }
 
@@ -40,7 +40,7 @@ exp_err_t Experiment::set_stage_count(uint8_t stage_count_value){
     return EXP_OK;
 }
 
-exp_err_t Experiment::set_stage_pwm_duty(uint8_t stage, uint8_t pwm_duty_value){
+experimentControl::exp_err_t experimentControl::Experiment::set_stage_pwm_duty(uint8_t stage, uint8_t pwm_duty_value){
     if(stage > stage_count) {
         return EXP_BAD_STAGE;
     }
@@ -53,8 +53,8 @@ exp_err_t Experiment::set_stage_pwm_duty(uint8_t stage, uint8_t pwm_duty_value){
     return EXP_OK;
 }
 
-exp_err_t Experiment::set_stage_length(uint32_t length_value){
-    for(int i = 0; i < STAGE_COUNT_MAX; i++){
+experimentControl::exp_err_t experimentControl::Experiment::set_stage_length(uint32_t length_value){
+    for(int i = 0; i < maxStages; i++){
         length[i] = length_value;
     }
 
@@ -62,12 +62,12 @@ exp_err_t Experiment::set_stage_length(uint32_t length_value){
 }
 
 
-exp_err_t Experiment::set_max_temperature(float temperature_value){
+experimentControl::exp_err_t experimentControl::Experiment::set_max_temperature(float temperature_value){
     max_temperature = temperature_value;
     return EXP_OK;
 }
 
-exp_err_t Experiment::generate_pwm_duty_array(){
+experimentControl::exp_err_t experimentControl::Experiment::generate_pwm_duty_array(){
     for(int i = 0; i < stage_count; i++){
         pwm_duty[i] = ((float)100/stage_count)*(i+1);;
     }
