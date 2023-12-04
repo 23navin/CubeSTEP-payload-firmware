@@ -69,7 +69,6 @@ pwmControl::pwm pwm(GPIO_NUM_5);
 i2cControl::i2cSlave i2c(GPIO_NUM_19, GPIO_NUM_23, 0x23);
 
 experimentControl::Experiment payload;
-Telemetry active;
 
 /* Task Handles */
 
@@ -180,8 +179,8 @@ void exp_log(void *pvParameters){
     ESP_LOGI(TAG_task, "Logger started: interval %ims", (int)*interval);
     
     //objects to hold log data
-    Telemetry capture;
-    char line[line_size];
+    telemetryControl::Telemetry capture;
+    char line[telemetryControl::sizeLine];
 
     while(1){
         //set logger status as active
@@ -193,7 +192,7 @@ void exp_log(void *pvParameters){
         capture.setTime(tv.tv_sec, tv.tv_usec);
 
         //capture temperature data
-        for(int sensor_number = 0; sensor_number < number_of_temp_sensors; sensor_number++){
+        for(int sensor_number = 0; sensor_number < telemetryControl::numSensors; sensor_number++){
             //Gather data
             float buffer = sensor.sample(sensor_number);
 
@@ -260,6 +259,7 @@ void i2c_ignore(i2cControl::parameter_t parameter){
 void i2c_restart_device(i2cControl::parameter_t parameter){
     if(parameter == 0x49) { //Restart I2C
         ESP_LOGI(TAG_i2c, "Restarting I2C");
+        sensor.powerOff();
         i2c.reset();
 
         i2c.write_one_byte(i2cControl::validByte);
@@ -306,6 +306,7 @@ void i2c_sleep_device(i2cControl::parameter_t parameter){
 
     //turn off any GPIO outputs
     pwm.pausePWM();
+    sensor.powerOff();
 
     i2c.write_one_byte(i2cControl::validByte);
 
@@ -324,6 +325,7 @@ void i2c_sleep_device(i2cControl::parameter_t parameter){
 void i2c_wake_device(i2cControl::parameter_t parameter){
     ESP_LOGI(TAG_i2c, "waking up...");
     i2c.write_one_byte(i2c.get_device_address());
+    sensor.powerOn();
 }
 
 /**
@@ -396,6 +398,7 @@ void i2c_start_experiment(i2cControl::parameter_t parameter){
         i2c.write_one_byte(i2cControl::invalidByte);
     }
 }
+
 /**
  * @brief OpCode 0x29
  * @note Exit experimeent
@@ -841,6 +844,8 @@ void i2c_reset_log(i2cControl::parameter_t parameter){
     //erase log
     file.clearLog(LOG_FILE_NAME);
 
+    telemetryControl::Telemetry active;
+
     //add header
     char header[spiffsControl::buffer_size];
     active.headerCSV(header);
@@ -980,9 +985,9 @@ void i2c_set_time(i2cControl::parameter_t parameter){
  */
 void i2c_get_temperature(i2cControl::parameter_t parameter){
     ESP_LOGW(TAG_i2c, "PARAMETER: %02X", (int)parameter);
-    if(parameter >= number_of_temp_sensors) {
+    if(parameter >= telemetryControl::numSensors) {
         i2c.write_one_byte(i2cControl::unknownByte);
-        ESP_LOGD(TAG_i2c, "sensor input: %i. max number of sensors: %i", (int)parameter, (int)number_of_temp_sensors);
+        ESP_LOGD(TAG_i2c, "sensor input: %i. max number of sensors: %i", (int)parameter, telemetryControl::numSensors);
 
     }
     else {
@@ -1024,9 +1029,8 @@ extern "C" void app_main(void)
     // PWM setup
     pwm.initPWM();
 
-    // SPI Flash reset log
-    // deleteLog(&file);
-    // createLog(&file, &active);
+    // ADC
+    sensor.powerOn();
 
     //define i2c handler call functions
     i2c.install_handler_unused(i2c_unused);
