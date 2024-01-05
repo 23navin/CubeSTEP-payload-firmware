@@ -21,6 +21,10 @@ The firmware for the Payload Processor was developed using the ESP-IDF extension
 
 A C++ driver is provided to allow the OBC to effectively communicate with the payload processor over I2C. The repository also includes a Raspbery Pi port for testing purposes.
 
+## [PCB](https://github.com/23navin/CubeSTEP-payload-pcb)
+
+A PCB was created per the PC/104-Plus spec using Altium Designer. It is based off the prototype design with the correct headers for flight use.
+
 ## [OneNote Link](https://livecsupomona-my.sharepoint.com/:o:/g/personal/bnjames_cpp_edu/Ev9EsCTfl25Cn0ulAFYuXMIBKXObV0LOeldq7t2hZRmNNg)
 
 If you are CPP-affiliated and are working on CubeSTEP, you have access to these notes.
